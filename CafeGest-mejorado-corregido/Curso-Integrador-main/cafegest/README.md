@@ -11,39 +11,28 @@ Proyecto académico de escritorio con Java 17, JavaFX, Maven y PostgreSQL. Manej
 
 ## Ejecutar en Windows
 
-Abre PowerShell en la carpeta `Curso-Integrador-main\cafegest`, la misma carpeta donde está este `pom.xml`. Configura la conexión para esa terminal y ejecuta la aplicación:
+1. Copia `src/main/resources/application-local.properties.example` como `src/main/resources/application-local.properties`.
+2. Edita `application-local.properties` y reemplaza `YOUR_POSTGRES_PASSWORD` por tu contraseña de PostgreSQL. Este archivo está ignorado por Git y no se debe subir.
+3. Abre PowerShell en la carpeta `Curso-Integrador-main\cafegest`, la misma carpeta donde está este `pom.xml`, y ejecuta:
 
 ```powershell
-$env:CAFEGEST_DB_URL = "jdbc:postgresql://localhost:5432/cafegest"
-$env:CAFEGEST_DB_USER = "postgres"
-$env:CAFEGEST_DB_PASSWORD = "TU_CONTRASENA_LOCAL"
 mvn clean javafx:run
 ```
 
-Reemplaza `TU_CONTRASENA_LOCAL` por la contraseña que configuraste en PostgreSQL. Estas variables duran mientras esa ventana de PowerShell siga abierta. Para probar sin abrir la interfaz, ejecuta `mvn test`.
-
-Si tu PostgreSQL usa otro host, puerto, base de datos o usuario, actualiza `CAFEGEST_DB_URL` y `CAFEGEST_DB_USER`. Si no se define la URL, la aplicación usa `jdbc:postgresql://localhost:5432/cafegest`; no hay contraseña predeterminada.
+La conexión predeterminada está en `src/main/resources/application.properties` y apunta a `jdbc:postgresql://localhost:5432/cafegest` con el usuario `postgres`. Si tu PostgreSQL usa otro host, puerto, base de datos o usuario, edita esos valores en `application-local.properties`. Para probar sin abrir la interfaz, ejecuta `mvn test`.
 
 ## Configuracion del equipo
 
 1. Instala PostgreSQL y crea una base vacía llamada `cafegest` con pgAdmin o la herramienta que uses.
-2. Usa el comando de ejecución anterior. La primera vez que se inicia, CaféGest crea las tablas y agrega productos de demostración si no hay productos activos.
-3. En el primer inicio de la base, crea la contraseña del administrador de CaféGest (mínimo 10 caracteres). El usuario inicial es `admin`.
+2. Copia el archivo de ejemplo de configuración local y escribe la contraseña válida de PostgreSQL.
+3. Ejecuta `mvn clean javafx:run`. La primera vez que se inicia, CaféGest crea las tablas y agrega productos de demostración si no hay productos activos.
+4. En el primer inicio de la base, crea la contraseña del administrador de CaféGest (mínimo 10 caracteres). El usuario inicial es `admin`.
 
 No uses una base que ya tenga tablas `usuarios`, `productos`, `ventas`, `venta_detalle` o `movimientos` con otro esquema.
 
 ## Trabajar con compañeros
 
-Para compartir ventas e inventario, todos deben conectarse a **la misma instancia PostgreSQL** accesible por la red. Quien administre esa instancia debe compartir de forma privada el host, puerto, nombre de base, usuario y contraseña. Cada integrante configura su propia terminal con esos datos:
-
-```powershell
-$env:CAFEGEST_DB_URL = "jdbc:postgresql://HOST_COMPARTIDO:5432/cafegest"
-$env:CAFEGEST_DB_USER = "USUARIO_COMPARTIDO"
-$env:CAFEGEST_DB_PASSWORD = "CONTRASENA_COMPARTIDA"
-mvn clean javafx:run
-```
-
-Reemplacen `HOST_COMPARTIDO` y las credenciales por los valores reales del servidor. `localhost` apunta a la computadora de cada integrante; no permite compartir datos entre computadoras. El servidor debe aceptar conexiones de la red del equipo y su firewall debe permitir el puerto configurado.
+Para compartir ventas e inventario, todos deben conectarse a **la misma instancia PostgreSQL** accesible por la red. Quien administre esa instancia debe compartir de forma privada el host, puerto, nombre de base, usuario y contraseña. Cada integrante copia el archivo de ejemplo como `application-local.properties`, coloca ahí esos valores y ejecuta `mvn clean javafx:run`. `localhost` apunta a la computadora de cada integrante; no permite compartir datos entre computadoras. El servidor debe aceptar conexiones de la red del equipo y su firewall debe permitir el puerto configurado.
 
 **No suban contraseñas, archivos de configuración con credenciales ni datos de acceso al repositorio.** No usen una base PostgreSQL expuesta públicamente sin restringir conexiones y permisos. Los datos que existan en una base H2 anterior no se copian automáticamente a PostgreSQL.
 
