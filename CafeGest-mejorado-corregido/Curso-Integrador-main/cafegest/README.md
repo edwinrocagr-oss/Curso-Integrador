@@ -33,3 +33,19 @@ PBKDF2-HMAC-SHA256 con sal aleatoria, consultas parametrizadas y transacciones. 
 
 ## Evidencias Git
 Crear repositorio y registrar commits sucesivos: `git init`, `git add .`, `git commit -m "feat: estructura inicial y persistencia"`. Publicar en GitHub desde el equipo del grupo. No se ha publicado automáticamente.
+
+
+## Mejoras de interfaz (edición UX)
+
+Esta versión incorpora una interfaz JavaFX más clara, con navegación lateral, tarjetas de resumen y formularios agrupados.
+
+- Catálogo inicial de 20 productos de cafetería (bebidas calientes y frías, té, panadería, postres y sándwiches). Son productos y precios de demostración en soles; puedes modificarlos desde Productos.
+- El catálogo de ejemplo se inserta solo si la base de datos no tiene productos activos. No se borran las ventas ni el inventario existentes.
+- Inventario con alertas visuales de stock bajo, productos agotados y registro de entradas/salidas con motivo.
+- Nueva venta con búsqueda, filtro por categoría, carrito, cantidades, subtotales, total y confirmación.
+- Historial con filtro por rango de fechas y usuario, total vendido y exportación a Excel.
+- Resumen con ventas del día, ingresos, productos activos y alertas de inventario.
+
+### Ejecutar
+
+Desde la carpeta que contiene este `pom.xml`, ejecutar `mvn clean javafx:run`. También se puede abrir como proyecto Maven en Apache NetBeans y ejecutar el proyecto.
