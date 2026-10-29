@@ -1,51 +1,58 @@
-# CaféGest — Sistema de gestión de cafetería
+# CaféGest - Sistema de gestión de cafetería
 
-Proyecto académico en Java 17 + JavaFX 21, Maven y JDBC. Inventario de **productos terminados**, sin recetas ni ingredientes.
+Proyecto académico de escritorio con Java 17, JavaFX, Maven y PostgreSQL. Maneja productos terminados, inventario y ventas.
 
-## Ejecutar
-1. Instalar JDK 17 y Apache Maven (o abrir como proyecto Maven en NetBeans/IntelliJ).
-2. Desde la carpeta del proyecto: `mvn clean javafx:run`
-3. En el primer inicio, crear contraseña de administrador (10+ caracteres). Usuario inicial: `admin`.
-4. Crear productos (ej. Café expreso, Latte, Capuchino), registrar entradas, vender y verificar el stock.
+## Requisitos
 
-## Persistencia
-Por defecto H2 guarda los datos en `~/.cafegest/cafegest.mv.db`, sin instalar PostgreSQL.
-Para PostgreSQL, crear primero una base vacía `cafegest` y configurar variables de entorno:
-- `CAFEGEST_DB_URL=jdbc:postgresql://localhost:5432/cafegest`
-- `CAFEGEST_DB_USER=postgres`
-- `CAFEGEST_DB_PASSWORD=<contraseña local>`
-El esquema se crea automáticamente al iniciar. **No** usar una base que contenga tablas con los mismos nombres.
+- JDK 17 o superior.
+- Apache Maven.
+- PostgreSQL 14 o superior, iniciado y accesible.
+- Una base de datos vacía llamada `cafegest` (el usuario de conexión debe poder crear tablas).
 
-## Funcionalidades actuales
-- Creación segura de administrador en el primer inicio, login y control básico de permisos.
-- CRUD de productos terminados (alta, edición, baja lógica).
-- Reposición y ajuste de stock con historial de movimientos en base de datos.
-- Registro de venta transaccional con descuento de stock y control de insuficiencia.
-- Dashboard con totales y alertas de stock bajo.
-- Historial de ventas y exportación XLSX mediante Apache POI.
-- Tests unitarios JUnit, DAO JDBC, patrón MVC por capas y CI GitHub Actions.
+## Ejecutar en Windows
 
-## Pendiente para el alcance completo
-Administración de usuarios y roles desde interfaz, pantalla de comandas, reportes avanzados, ticket interno imprimible, pruebas de integración y evaluación de rendimiento. No afirmar que están implementados.
+Abre PowerShell en la carpeta `Curso-Integrador-main\cafegest`, la misma carpeta donde está este `pom.xml`. Configura la conexión para esa terminal y ejecuta la aplicación:
 
-## Seguridad
-PBKDF2-HMAC-SHA256 con sal aleatoria, consultas parametrizadas y transacciones. La contraseña inicial la define el usuario. Para uso real multiusuario falta endurecer la autorización en capa de servicio, recuperación de cuentas y controles de acceso a la base de datos.
+```powershell
+$env:CAFEGEST_DB_URL = "jdbc:postgresql://localhost:5432/cafegest"
+$env:CAFEGEST_DB_USER = "postgres"
+$env:CAFEGEST_DB_PASSWORD = "TU_CONTRASENA_LOCAL"
+mvn clean javafx:run
+```
 
-## Evidencias Git
-Crear repositorio y registrar commits sucesivos: `git init`, `git add .`, `git commit -m "feat: estructura inicial y persistencia"`. Publicar en GitHub desde el equipo del grupo. No se ha publicado automáticamente.
+Reemplaza `TU_CONTRASENA_LOCAL` por la contraseña que configuraste en PostgreSQL. Estas variables duran mientras esa ventana de PowerShell siga abierta. Para probar sin abrir la interfaz, ejecuta `mvn test`.
 
+Si tu PostgreSQL usa otro host, puerto, base de datos o usuario, actualiza `CAFEGEST_DB_URL` y `CAFEGEST_DB_USER`. Si no se define la URL, la aplicación usa `jdbc:postgresql://localhost:5432/cafegest`; no hay contraseña predeterminada.
 
-## Mejoras de interfaz (edición UX)
+## Configuracion del equipo
 
-Esta versión incorpora una interfaz JavaFX más clara, con navegación lateral, tarjetas de resumen y formularios agrupados.
+1. Instala PostgreSQL y crea una base vacía llamada `cafegest` con pgAdmin o la herramienta que uses.
+2. Usa el comando de ejecución anterior. La primera vez que se inicia, CaféGest crea las tablas y agrega productos de demostración si no hay productos activos.
+3. En el primer inicio de la base, crea la contraseña del administrador de CaféGest (mínimo 10 caracteres). El usuario inicial es `admin`.
 
-- Catálogo inicial de 20 productos de cafetería (bebidas calientes y frías, té, panadería, postres y sándwiches). Son productos y precios de demostración en soles; puedes modificarlos desde Productos.
-- El catálogo de ejemplo se inserta solo si la base de datos no tiene productos activos. No se borran las ventas ni el inventario existentes.
-- Inventario con alertas visuales de stock bajo, productos agotados y registro de entradas/salidas con motivo.
-- Nueva venta con búsqueda, filtro por categoría, carrito, cantidades, subtotales, total y confirmación.
-- Historial con filtro por rango de fechas y usuario, total vendido y exportación a Excel.
-- Resumen con ventas del día, ingresos, productos activos y alertas de inventario.
+No uses una base que ya tenga tablas `usuarios`, `productos`, `ventas`, `venta_detalle` o `movimientos` con otro esquema.
 
-### Ejecutar
+## Trabajar con compañeros
 
-Desde la carpeta que contiene este `pom.xml`, ejecutar `mvn clean javafx:run`. También se puede abrir como proyecto Maven en Apache NetBeans y ejecutar el proyecto.
+Para compartir ventas e inventario, todos deben conectarse a **la misma instancia PostgreSQL** accesible por la red. Quien administre esa instancia debe compartir de forma privada el host, puerto, nombre de base, usuario y contraseña. Cada integrante configura su propia terminal con esos datos:
+
+```powershell
+$env:CAFEGEST_DB_URL = "jdbc:postgresql://HOST_COMPARTIDO:5432/cafegest"
+$env:CAFEGEST_DB_USER = "USUARIO_COMPARTIDO"
+$env:CAFEGEST_DB_PASSWORD = "CONTRASENA_COMPARTIDA"
+mvn clean javafx:run
+```
+
+Reemplacen `HOST_COMPARTIDO` y las credenciales por los valores reales del servidor. `localhost` apunta a la computadora de cada integrante; no permite compartir datos entre computadoras. El servidor debe aceptar conexiones de la red del equipo y su firewall debe permitir el puerto configurado.
+
+**No suban contraseñas, archivos de configuración con credenciales ni datos de acceso al repositorio.** No usen una base PostgreSQL expuesta públicamente sin restringir conexiones y permisos. Los datos que existan en una base H2 anterior no se copian automáticamente a PostgreSQL.
+
+## Funcionalidades
+
+- Inicio de sesión y creación inicial del administrador con hash PBKDF2-HMAC-SHA256.
+- Alta, edicion y baja logica de productos.
+- Ajustes de inventario y registro de movimientos.
+- Ventas transaccionales con validación y descuento de stock.
+- Resumen, historial con filtros y exportación a Excel.
+
+La administración de usuarios desde la interfaz, los reportes avanzados, los tickets imprimibles y las pruebas de integración siguen pendientes.

@@ -1,19 +1,18 @@
 package pe.edu.utp.cafegest.config;
 
 import java.sql.*;
-import java.nio.file.*;
 
-/** Fuente de conexiones y creación inicial del esquema. Por defecto usa H2 local. */
+/** Fuente de conexiones PostgreSQL y creación inicial del esquema. */
 public final class Database {
     private Database() {}
     public static Connection open() throws SQLException {
-        String url = System.getenv("CAFEGEST_DB_URL");
-        if (url == null || url.isBlank()) {
-            try { Files.createDirectories(Path.of(System.getProperty("user.home"), ".cafegest")); }
-            catch (Exception e) { throw new SQLException("No se pudo crear el directorio de datos", e); }
-            url = "jdbc:h2:file:" + Path.of(System.getProperty("user.home"), ".cafegest", "cafegest").toAbsolutePath() + ";MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE";
+        String password = System.getenv("CAFEGEST_DB_PASSWORD");
+        if (password == null || password.isBlank()) {
+            throw new SQLException("Configura CAFEGEST_DB_PASSWORD antes de iniciar la conexion a PostgreSQL.");
         }
-        return DriverManager.getConnection(url, System.getenv().getOrDefault("CAFEGEST_DB_USER", "sa"), System.getenv().getOrDefault("CAFEGEST_DB_PASSWORD", ""));
+        String url = System.getenv().getOrDefault("CAFEGEST_DB_URL", "jdbc:postgresql://localhost:5432/cafegest");
+        String user = System.getenv().getOrDefault("CAFEGEST_DB_USER", "postgres");
+        return DriverManager.getConnection(url, user, password);
     }
     public static void init() throws SQLException {
         try (Connection c = open(); Statement s = c.createStatement()) {
