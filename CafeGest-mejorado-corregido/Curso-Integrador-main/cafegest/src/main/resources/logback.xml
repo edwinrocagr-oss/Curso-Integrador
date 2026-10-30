@@ -1,0 +1,23 @@
+<configuration>
+    <!-- Salida en la consola -->
+    <appender name="CONSOLA" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Salida en un archivo de texto -->
+    <appender name="ARCHIVO" class="ch.qos.logback.core.FileAppender">
+        <file>cafegest.log</file>
+        <append>true</append>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Nivel de registro general -->
+    <root level="info">
+        <appender-ref ref="CONSOLA" />
+        <appender-ref ref="ARCHIVO" />
+    </root>
+</configuration>

@@ -16,33 +16,56 @@ import pe.edu.utp.cafegest.config.Database;
 import pe.edu.utp.cafegest.dao.IProductoDao;
 import pe.edu.utp.cafegest.dao.IVentaDao;
 import pe.edu.utp.cafegest.dao.ProductoDaoImpl;
+import pe.edu.utp.cafegest.dao.IUsuarioDao;
+import pe.edu.utp.cafegest.dao.UsuarioDaoImpl;
+import pe.edu.utp.cafegest.dao.IComandaDao;
+import pe.edu.utp.cafegest.dao.ComandaDaoImpl;
 import pe.edu.utp.cafegest.model.Producto;
+import pe.edu.utp.cafegest.model.Usuario;
+import pe.edu.utp.cafegest.model.Comanda;
 import pe.edu.utp.cafegest.service.AuthService;
 import pe.edu.utp.cafegest.service.VentaService;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.math.BigDecimal;
 import java.sql.*;
+import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.function.Function;
 
-/** Interfaz JavaFX de CaféGest: navegación sencilla, catálogo, inventario y ventas. */
+/** Interfaz JavaFX de CaféGest: navegación sencilla, catálogo, inventario, ventas, usuarios y comandas. */
 public class MainApp extends Application {
     
+    private static final Logger logger = LoggerFactory.getLogger(MainApp.class);
+
     // Servicios de la capa de negocio
     private final VentaService ventas = new VentaService();
     private final AuthService auth = new AuthService();
     
-    // Pequeño proxy temporal para ProductoDao (lo ideal es crear un ProductoService)
     private final IProductoDao productoService = new IProductoDao() {
         @Override public List<Producto> listar() throws SQLException { try(Connection c=Database.open()){return new ProductoDaoImpl(c).listar();} }
         @Override public void guardar(Integer id, String n, String cat, BigDecimal p, int s, int m) throws SQLException { try(Connection c=Database.open()){new ProductoDaoImpl(c).guardar(id,n,cat,p,s,m);} }
         @Override public void desactivar(int id) throws SQLException { try(Connection c=Database.open()){new ProductoDaoImpl(c).desactivar(id);} }
         @Override public void ajustar(int id, int d, String obs) throws SQLException { try(Connection c=Database.open()){new ProductoDaoImpl(c).ajustar(id,d,obs);} }
+    };
+
+    private final IUsuarioDao usuarioService = new IUsuarioDao() {
+        @Override public List<Usuario> listar() throws SQLException { try(Connection c=Database.open()){return new UsuarioDaoImpl(c).listar();} }
+        @Override public void registrar(String u, String p, String r) throws SQLException { try(Connection c=Database.open()){new UsuarioDaoImpl(c).registrar(u,p,r);} }
+        @Override public void cambiarEstado(int id, boolean estado) throws SQLException { try(Connection c=Database.open()){new UsuarioDaoImpl(c).cambiarEstado(id, estado);} }
+    };
+
+    // Servicio proxy temporal para ComandaDao
+    private final IComandaDao comandaService = new IComandaDao() {
+        @Override public List<Comanda> listarPendientes() throws SQLException { try(Connection c=Database.open()){return new ComandaDaoImpl(c).listarPendientes();} }
+        @Override public void registrar(String m, String p) throws SQLException { try(Connection c=Database.open()){new ComandaDaoImpl(c).registrar(m,p);} }
+        @Override public void marcarCompletada(int id) throws SQLException { try(Connection c=Database.open()){new ComandaDaoImpl(c).marcarCompletada(id);} }
     };
 
     private Stage stage;
@@ -77,6 +100,7 @@ public class MainApp extends Application {
     private void show(Parent parent) { stage.setScene(new Scene(parent)); }
     private Button primary(String text) { Button b = new Button(text); b.setStyle("-fx-background-color:"+GREEN+";-fx-text-fill:white;-fx-font-weight:700;-fx-background-radius:9;-fx-padding:10 16 10 16;-fx-cursor:hand;"); return b; }
     private Button secondary(String text) { Button b = new Button(text); b.setStyle("-fx-background-color:"+GREEN_LIGHT+";-fx-text-fill:"+GREEN+";-fx-font-weight:700;-fx-background-radius:9;-fx-padding:10 14 10 14;-fx-cursor:hand;"); return b; }
+    
     private void setup() {
         VBox v = new VBox(15); v.setPadding(new Insets(38)); v.setAlignment(Pos.CENTER_LEFT); v.setMaxWidth(460);
         v.setStyle(CSS+"-fx-background-color:white;-fx-background-radius:18;");
@@ -88,6 +112,7 @@ public class MainApp extends Application {
         b.setOnAction(e -> run(() -> { if (!p.getText().equals(confirm.getText())) throw new IllegalArgumentException("Las contraseñas no coinciden"); auth.crearAdminInicial(p.getText()); login(); }));
         v.getChildren().addAll(logo,desc,p,confirm,b); show(new StackPane(v));
     }
+    
     private void login() {
         VBox v = new VBox(15); v.setPadding(new Insets(34)); v.setAlignment(Pos.CENTER_LEFT); v.setMaxWidth(420);
         v.setStyle(CSS+"-fx-background-color:white;-fx-background-radius:18;-fx-effect:dropshadow(gaussian, #00000018, 20, 0, 0, 4);");
@@ -99,6 +124,7 @@ public class MainApp extends Application {
         v.getChildren().addAll(logo,s,new Separator(),new Label("Iniciar sesión"),u,p,b);
         StackPane root = new StackPane(v); root.setPadding(new Insets(30)); root.setStyle("-fx-background-color:"+BG+";"); show(root);
     }
+    
     private void home() {
         BorderPane root = new BorderPane(); root.setStyle(CSS+"-fx-background-color:"+BG+";");
         VBox nav = new VBox(8); nav.setPadding(new Insets(24,14,20,14)); nav.setPrefWidth(225); nav.setStyle("-fx-background-color:"+GREEN+";");
@@ -106,24 +132,40 @@ public class MainApp extends Application {
         Label tagline = new Label("GESTIÓN DE CAFETERÍA"); tagline.setStyle("-fx-text-fill:#B8D0C1;-fx-font-size:10px;-fx-font-weight:bold;");
         nav.getChildren().addAll(logo,tagline,new Separator());
         content = new StackPane(); content.setPadding(new Insets(0)); root.setLeft(nav); root.setCenter(content);
-        String[][] items = {{"⌂","Resumen"},{"☕","Productos"},{"▤","Inventario"},{"＋","Nueva venta"},{"◷","Historial y reportes"}};
+        
+        // Se agregó la opción de Comandas al menú
+        String[][] items = {{"⌂","Resumen"},{"☕","Productos"},{"▤","Inventario"},{"＋","Nueva venta"},{"◷","Historial y reportes"},{"👥","Usuarios"},{"🛎️","Comandas"}};
         for (int i=0;i<items.length;i++) { final int index=i; Button b=new Button(items[i][0]+"    "+items[i][1]); b.setAlignment(Pos.CENTER_LEFT); b.setMaxWidth(Double.MAX_VALUE); b.setPrefHeight(44); b.setStyle(navStyle(false)); b.setOnMouseEntered(e->b.setStyle(navStyle(true))); b.setOnMouseExited(e->b.setStyle(navStyle(false))); b.setOnAction(e->navigate(index)); nav.getChildren().add(b); }
+        
         Region spacer=new Region(); VBox.setVgrow(spacer,Priority.ALWAYS); Label user=new Label("●  "+usuario+"\n    "+rol); user.setStyle("-fx-text-fill:white;-fx-padding:12 5 12 5;"); Button logout=new Button("↪   Cerrar sesión"); logout.setMaxWidth(Double.MAX_VALUE); logout.setStyle(navStyle(false)); logout.setOnAction(e->login()); nav.getChildren().addAll(spacer,user,logout);
         navigate(0); show(root);
     }
+    
     private String navStyle(boolean hover) { return "-fx-background-color:"+(hover?"#2C644F":"transparent")+";-fx-text-fill:white;-fx-font-size:13px;-fx-font-weight:600;-fx-padding:12 10 12 10;-fx-background-radius:9;-fx-cursor:hand;"; }
-    private void navigate(int index) { try { Node n=switch(index){case 0->dashboard();case 1->productos();case 2->inventario();case 3->venta();default->reportes();}; content.getChildren().setAll(n); } catch(Exception e){error(e);} }
+    
+    private void navigate(int index) { 
+        try { 
+            Node n=switch(index){
+                case 0->dashboard();
+                case 1->productos();
+                case 2->inventario();
+                case 3->venta();
+                case 4->reportes();
+                case 5->usuarios();
+                default->comandas(); // Nueva ruta de comandas (índice 6)
+            }; 
+            content.getChildren().setAll(n); 
+        } catch(Exception e){error(e);} 
+    }
 
     private Node dashboard() throws Exception {
         VBox v=page("Resumen de la cafetería","Hola, "+usuario+". Aquí tienes el estado de tu negocio.");
         List<Producto> ps=productoService.listar(); long bajos=ps.stream().filter(p->p.stock()<=p.minimo()).count();
         
-        // --- SQL REEMPLAZADO POR LLAMADAS AL SERVICIO ---
         IVentaDao.ResumenVentas resumenHoy = ventas.obtenerResumenHoy();
         int ventasHoy = resumenHoy.cantidad();
         BigDecimal ingresosHoy = resumenHoy.total();
         int ventasTotal = ventas.obtenerTotalVentasHistoricas();
-        // --------------------------------------------------
 
         HBox metrics=new HBox(14); metrics.getChildren().addAll(metric("Ventas de hoy",""+ventasHoy,"▣","#E5F0E9"),metric("Ingresos de hoy","S/ "+ingresosHoy.toPlainString(),"S/","#F9EEDC"),metric("Productos activos",""+ps.size(),"☕","#E7ECF8"),metric("Stock por revisar",""+bajos,"!",bajos>0?"#F9E5E1":"#E5F0E9"));
         for(Node n:metrics.getChildren()) HBox.setHgrow(n,Priority.ALWAYS);
@@ -181,8 +223,25 @@ public class MainApp extends Application {
         Label total=new Label("Total: S/ 0.00");total.setStyle("-fx-font-size:24px;-fx-font-weight:800;-fx-text-fill:"+GREEN+";");
         add.setOnAction(e->{Producto p=catalog.getSelectionModel().getSelectedItem();if(p==null){new Alert(Alert.AlertType.WARNING,"Selecciona un producto del catálogo.").showAndWait();return;}int q=qty.getValue();int existing=cart.getItems().stream().filter(it->it.producto().id()==p.id()).mapToInt(CartItem::cantidad).sum();if(existing+q>p.stock()){new Alert(Alert.AlertType.WARNING,"Stock disponible: "+p.stock()+" unidades.").showAndWait();return;}Optional<CartItem> old=cart.getItems().stream().filter(it->it.producto().id()==p.id()).findFirst();if(old.isPresent()){int idx=cart.getItems().indexOf(old.get());cart.getItems().set(idx,new CartItem(p,old.get().cantidad()+q));}else cart.getItems().add(new CartItem(p,q));updateTotal(cart,total);});
         Button remove=secondary("Quitar seleccionado");remove.setOnAction(e->{CartItem item=cart.getSelectionModel().getSelectedItem();if(item!=null)cart.getItems().remove(item);updateTotal(cart,total);});Button clear=secondary("Vaciar carrito");clear.setOnAction(e->{cart.getItems().clear();updateTotal(cart,total);});
-        Button confirm=primary("Confirmar venta");confirm.setOnAction(e->run(()->{if(cart.getItems().isEmpty())throw new IllegalArgumentException("Agrega al menos un producto antes de confirmar.");List<VentaService.Linea> lines=cart.getItems().stream().map(it->new VentaService.Linea(it.producto().id(),it.cantidad())).toList();BigDecimal amount=cart.getItems().stream().map(CartItem::subtotal).reduce(BigDecimal.ZERO,BigDecimal::add);int id=ventas.vender(usuario,lines);Alert done=new Alert(Alert.AlertType.INFORMATION,"Venta #"+id+" registrada.\nTotal: S/ "+amount.toPlainString()+"\nEl inventario se actualizó correctamente.");done.setHeaderText("Venta completada");done.showAndWait();cart.getItems().clear();available.clear();available.addAll(productoService.listar());filter.run();updateTotal(cart,total);}));
-        VBox left=card();left.getChildren().addAll(new Label("1. Catálogo de productos"),new HBox(8,search,category),catalog,new HBox(8,new Label("Cantidad"),qty,add));VBox right=card();right.getChildren().addAll(new Label("2. Resumen de la venta"),cart,new HBox(8,remove,clear),total,confirm);HBox layout=new HBox(14,left,right);HBox.setHgrow(left,Priority.ALWAYS);HBox.setHgrow(right,Priority.ALWAYS);left.setPrefWidth(560);right.setPrefWidth(520);v.getChildren().add(layout);return v;
+        Button confirm = primary("Confirmar venta y enviar a Cocina");
+        confirm.setOnAction(e -> run(() -> {
+            if (cart.getItems().isEmpty()) throw new IllegalArgumentException("Agrega al menos un producto antes de confirmar.");
+            List<VentaService.Linea> lines = cart.getItems().stream().map(it -> new VentaService.Linea(it.producto().id(), it.cantidad())).toList();
+            BigDecimal amount = cart.getItems().stream().map(CartItem::subtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
+            int id = ventas.vender(usuario, lines);
+            StringBuilder resumenPedido = new StringBuilder();
+            for (CartItem item : cart.getItems()) {resumenPedido.append(item.cantidad()).append("x ").append(item.producto().nombre()).append(" | ");}
+            comandaService.registrar("Venta #" + id + " (" + usuario + ")", resumenPedido.toString());
+            Alert done = new Alert(Alert.AlertType.INFORMATION, "Venta #" + id + " cobrada.\nTotal: S/ " + amount.toPlainString() + "\nTicket enviado a cocina automáticamente.");
+            done.setHeaderText("Venta completada");
+            done.showAndWait();
+            
+            cart.getItems().clear();
+            available.clear();
+            available.addAll(productoService.listar());
+            filter.run();
+            updateTotal(cart, total);
+        }));        VBox left=card();left.getChildren().addAll(new Label("1. Catálogo de productos"),new HBox(8,search,category),catalog,new HBox(8,new Label("Cantidad"),qty,add));VBox right=card();right.getChildren().addAll(new Label("2. Resumen de la venta"),cart,new HBox(8,remove,clear),total,confirm);HBox layout=new HBox(14,left,right);HBox.setHgrow(left,Priority.ALWAYS);HBox.setHgrow(right,Priority.ALWAYS);left.setPrefWidth(560);right.setPrefWidth(520);v.getChildren().add(layout);return v;
     }
     private void updateTotal(TableView<CartItem> cart,Label total){BigDecimal sum=cart.getItems().stream().map(CartItem::subtotal).reduce(BigDecimal.ZERO,BigDecimal::add);total.setText("Total: S/ "+sum.setScale(2,java.math.RoundingMode.HALF_UP).toPlainString());}
 
@@ -191,26 +250,162 @@ public class MainApp extends Application {
         TableView<String[]> t=new TableView<>();String[] cols={"N.º venta","Fecha y hora","Usuario","Total"};for(int i=0;i<cols.length;i++){final int idx=i;TableColumn<String[],String> c=new TableColumn<>(cols[i]);c.setCellValueFactory(x->new SimpleStringProperty(x.getValue()[idx]));c.setPrefWidth(new double[]{95,220,150,120}[i]);t.getColumns().add(c);}t.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);t.setPrefHeight(330);
         Label count=new Label();Label sum=new Label();sum.setStyle("-fx-font-size:21px;-fx-font-weight:800;-fx-text-fill:"+GREEN+";");
         
-        // --- SQL REEMPLAZADO POR LLAMADAS AL SERVICIO ---
         Runnable load = () -> run(() -> {
             t.getItems().clear();
             List<String[]> listaVentas = ventas.buscarVentas(from.getValue(), to.getValue(), userFilter.getText());
             BigDecimal total = BigDecimal.ZERO;
-            
             for (String[] venta : listaVentas) {
                 t.getItems().add(new String[]{venta[0], venta[1], venta[2], "S/ " + venta[3]});
                 total = total.add(new BigDecimal(venta[3]));
             }
-            
             count.setText("Ventas encontradas: " + t.getItems().size());
             sum.setText("Total vendido: S/ " + total.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString());
         });
-        // --------------------------------------------------
 
         search.setOnAction(e->{if(from.getValue()==null||to.getValue()==null||from.getValue().isAfter(to.getValue())){new Alert(Alert.AlertType.WARNING,"Selecciona un rango de fechas válido.").showAndWait();return;}load.run();});reset.setOnAction(e->{from.setValue(LocalDate.now().withDayOfMonth(1));to.setValue(LocalDate.now());userFilter.clear();load.run();});
         Button export=secondary("Exportar a Excel (.xlsx)");export.setOnAction(e->run(()->{if(t.getItems().isEmpty())throw new IllegalArgumentException("No hay ventas para exportar con los filtros actuales.");FileChooser f=new FileChooser();f.setInitialFileName("reporte_cafegest.xlsx");f.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel (*.xlsx)","*.xlsx"));File file=f.showSaveDialog(stage);if(file==null)return;exportarVentasExcel(t.getItems(),cols,from.getValue(),to.getValue(),userFilter.getText().trim(),file);new Alert(Alert.AlertType.INFORMATION,"Reporte exportado correctamente.").showAndWait();}));
         VBox filters=card();filters.getChildren().addAll(new Label("Filtros de consulta"),new HBox(10,new VBox(5,subtitle("Desde"),from),new VBox(5,subtitle("Hasta"),to),new VBox(5,subtitle("Usuario"),userFilter),search,reset));VBox summary=card();summary.getChildren().addAll(count,sum);VBox history=card();history.getChildren().addAll(new Label("Detalle de ventas"),t,new HBox(export));v.getChildren().addAll(filters,summary,history);load.run();return v;
     }
+    
+    private Node usuarios() throws Exception {
+        if (!"ADMIN".equals(rol)) {
+            return page("Usuarios", "Acceso denegado. Solo los administradores pueden gestionar otras cuentas.");
+        }
+        
+        VBox v = page("Usuarios", "Gestiona los accesos al sistema para meseros y otros administradores.");
+        
+        TableView<Usuario> t = new TableView<>();
+        String[] cols = {"ID", "Usuario", "Rol", "Estado"};
+        List<Function<Usuario, String>> fs = List.of(u->""+u.id(), Usuario::username, Usuario::rol, u -> u.activo() ? "Activo" : "Inactivo");
+        
+        for (int i=0; i<cols.length; i++) {
+            final int j = i;
+            TableColumn<Usuario, String> c = new TableColumn<>(cols[i]);
+            c.setCellValueFactory(d -> new SimpleStringProperty(fs.get(j).apply(d.getValue())));
+            c.setPrefWidth(new double[]{60, 250, 150, 100}[i]);
+            
+            // Colorear el estado
+            if(i == 3) {
+                c.setCellFactory(col -> new TableCell<>(){
+                    @Override protected void updateItem(String value, boolean empty) {
+                        super.updateItem(value, empty);
+                        setText(empty ? null : value);
+                        if(empty || getTableRow() == null || getTableRow().getItem() == null) setStyle("");
+                        else setStyle("Inactivo".equals(value) ? "-fx-text-fill:#B42318;-fx-font-weight:bold;" : "-fx-text-fill:"+GREEN+";-fx-font-weight:bold;");
+                    }
+                });
+            }
+            t.getColumns().add(c);
+        }
+        t.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        t.setPrefHeight(280);
+        
+        List<Usuario> all = new ArrayList<>(usuarioService.listar());
+        t.getItems().setAll(all);
+        
+        TextField nombre = new TextField(); nombre.setPromptText("Nombre de usuario");
+        PasswordField pass = new PasswordField(); pass.setPromptText("Contraseña (mínimo 6 caracteres)");
+        ComboBox<String> roles = new ComboBox<>(FXCollections.observableArrayList("ADMIN", "CAJERO")); roles.setPromptText("Rol");
+        HBox fields = new HBox(10, nombre, pass, roles);
+        for(Node n : fields.getChildren()) HBox.setHgrow(n, Priority.ALWAYS);
+        
+        Button save = primary("Registrar usuario");
+        Button toggleState = secondary("Activar / Desactivar cuenta");
+        
+        Runnable refresh = () -> { try { all.clear(); all.addAll(usuarioService.listar()); t.getItems().setAll(all); } catch(Exception ex) { error(ex); } };
+        
+        save.setOnAction(e -> run(() -> {
+            if (nombre.getText().isBlank() || pass.getText().isBlank() || roles.getValue() == null) throw new IllegalArgumentException("Completa todos los campos para registrar.");
+            if (pass.getText().length() < 6) throw new IllegalArgumentException("La contraseña debe tener al menos 6 caracteres.");
+            usuarioService.registrar(nombre.getText().trim(), pass.getText(), roles.getValue());
+            refresh.run();
+            nombre.clear(); pass.clear(); roles.setValue(null);
+            new Alert(Alert.AlertType.INFORMATION, "Usuario registrado exitosamente.").showAndWait();
+        }));
+        
+        toggleState.setOnAction(e -> run(() -> {
+            Usuario u = t.getSelectionModel().getSelectedItem();
+            if (u == null) throw new IllegalArgumentException("Selecciona un usuario de la tabla.");
+            if (u.username().equals(usuario)) throw new IllegalArgumentException("Seguridad: No puedes cambiar el estado de tu propia cuenta.");
+            
+            String accion = u.activo() ? "desactivar" : "activar";
+            Alert a = new Alert(Alert.AlertType.CONFIRMATION, "¿Seguro que deseas " + accion + " la cuenta de " + u.username() + "?", ButtonType.CANCEL, ButtonType.OK);
+            a.setHeaderText("Confirmar acción");
+            if (a.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
+                usuarioService.cambiarEstado(u.id(), !u.activo());
+                refresh.run();
+            }
+        }));
+        
+        VBox editor = card();
+        editor.getChildren().addAll(new Label("Registrar nuevo usuario"), fields, new HBox(10, save, toggleState));
+        
+        v.getChildren().addAll(t, editor);
+        return v;
+    }
+
+    // --- NUEVO MÓDULO DE COMANDAS ---
+    private Node comandas() throws Exception {
+        VBox v = page("Comandas", "Pizarra de pedidos pendientes de preparación en cocina o barra.");
+        
+        TableView<Comanda> t = new TableView<>();
+        t.setPlaceholder(new Label("No hay comandas pendientes. ¡Todo está al día!"));
+        String[] cols = {"N.º", "Mesa / Cliente", "Detalle del Pedido", "Hora de registro"};
+        
+        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
+        List<Function<Comanda, String>> fs = List.of(
+            c -> "" + c.id(), 
+            Comanda::mesa, 
+            Comanda::pedido, 
+            c -> sdf.format(c.fecha())
+        );
+        
+        for (int i=0; i<cols.length; i++) {
+            final int j = i;
+            TableColumn<Comanda, String> c = new TableColumn<>(cols[i]);
+            c.setCellValueFactory(d -> new SimpleStringProperty(fs.get(j).apply(d.getValue())));
+            c.setPrefWidth(new double[]{50, 150, 350, 120}[i]);
+            t.getColumns().add(c);
+        }
+        t.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        t.setPrefHeight(300);
+        
+        Runnable refresh = () -> { 
+            try { 
+                t.getItems().setAll(comandaService.listarPendientes()); 
+            } catch(Exception ex) { error(ex); } 
+        };
+        
+        TextField mesa = new TextField(); mesa.setPromptText("Ej. Mesa 4 o 'Para llevar - Juan'");
+        TextField pedido = new TextField(); pedido.setPromptText("Ej. 2 Capuccinos, 1 Croissant...");
+        HBox.setHgrow(pedido, Priority.ALWAYS);
+        
+        Button add = primary("Registrar Comanda");
+        add.setOnAction(e -> run(() -> {
+            if (mesa.getText().isBlank() || pedido.getText().isBlank()) throw new IllegalArgumentException("Completa la mesa y el pedido para registrar la comanda.");
+            comandaService.registrar(mesa.getText().trim(), pedido.getText().trim());
+            refresh.run();
+            mesa.clear(); pedido.clear();
+        }));
+        
+        Button done = secondary("✔ Marcar pedido como Listo");
+        done.setStyle("-fx-background-color:#E5F0E9;-fx-text-fill:#174D3A;-fx-font-weight:800;-fx-padding:10 16 10 16;-fx-cursor:hand;");
+        done.setOnAction(e -> run(() -> {
+            Comanda c = t.getSelectionModel().getSelectedItem();
+            if (c == null) throw new IllegalArgumentException("Selecciona una comanda de la tabla para marcarla como lista.");
+            comandaService.marcarCompletada(c.id());
+            refresh.run();
+        }));
+        
+        VBox newCmd = card();
+        newCmd.getChildren().addAll(new Label("Anotar nuevo pedido"), new HBox(10, mesa, pedido, add));
+        
+        v.getChildren().addAll(new HBox(10, done), t, newCmd);
+        refresh.run();
+        
+        return v;
+    }
+
     private void exportarVentasExcel(List<String[]> ventasExportadas,String[] columnas,LocalDate desde,LocalDate hasta,String usuarioFiltrado,File archivo)throws Exception{
         try(XSSFWorkbook wb=new XSSFWorkbook();FileOutputStream out=new FileOutputStream(archivo)){
             Sheet hoja=wb.createSheet("Ventas");
@@ -241,8 +436,15 @@ public class MainApp extends Application {
             wb.write(out);
         }
     }
+    
     private interface Action { void run() throws Exception; }
-    private void run(Action a){try{a.run();}catch(Exception e){error(e);}}
-    private void error(Exception e){new Alert(Alert.AlertType.ERROR,e.getMessage()==null?e.toString():e.getMessage()).showAndWait();}
-    public static void main(String[] args){launch(args);}
+    private void run(Action a){
+        try{ a.run(); } catch(Exception e) { error(e); }
+    }
+    private void error(Exception e){
+        logger.error("Se produjo una excepción en el sistema: ", e);
+        new Alert(Alert.AlertType.ERROR, e.getMessage() == null ? e.toString() : e.getMessage()).showAndWait();
+    }
+    
+    public static void main(String[] args){ launch(args); }
 }
