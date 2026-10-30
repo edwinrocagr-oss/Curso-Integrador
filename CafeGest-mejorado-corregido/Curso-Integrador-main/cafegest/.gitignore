@@ -6,3 +6,11 @@ target/
 .env
 *.db
 *.mv.db
+
+# Credenciales de base de datos local
+src/main/resources/application-local.properties
+
+# Archivos residuales de compilación
+*.class
+inputFiles.lst
+createdFiles.lst

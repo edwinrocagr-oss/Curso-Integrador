@@ -13,7 +13,9 @@ import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import pe.edu.utp.cafegest.config.Database;
-import pe.edu.utp.cafegest.dao.ProductoDao;
+import pe.edu.utp.cafegest.dao.IProductoDao;
+import pe.edu.utp.cafegest.dao.IVentaDao;
+import pe.edu.utp.cafegest.dao.ProductoDaoImpl;
 import pe.edu.utp.cafegest.model.Producto;
 import pe.edu.utp.cafegest.service.AuthService;
 import pe.edu.utp.cafegest.service.VentaService;
@@ -30,9 +32,19 @@ import java.util.function.Function;
 
 /** Interfaz JavaFX de CaféGest: navegación sencilla, catálogo, inventario y ventas. */
 public class MainApp extends Application {
-    private final ProductoDao dao = new ProductoDao();
+    
+    // Servicios de la capa de negocio
     private final VentaService ventas = new VentaService();
     private final AuthService auth = new AuthService();
+    
+    // Pequeño proxy temporal para ProductoDao (lo ideal es crear un ProductoService)
+    private final IProductoDao productoService = new IProductoDao() {
+        @Override public List<Producto> listar() throws SQLException { try(Connection c=Database.open()){return new ProductoDaoImpl(c).listar();} }
+        @Override public void guardar(Integer id, String n, String cat, BigDecimal p, int s, int m) throws SQLException { try(Connection c=Database.open()){new ProductoDaoImpl(c).guardar(id,n,cat,p,s,m);} }
+        @Override public void desactivar(int id) throws SQLException { try(Connection c=Database.open()){new ProductoDaoImpl(c).desactivar(id);} }
+        @Override public void ajustar(int id, int d, String obs) throws SQLException { try(Connection c=Database.open()){new ProductoDaoImpl(c).ajustar(id,d,obs);} }
+    };
+
     private Stage stage;
     private String usuario;
     private String rol;
@@ -104,10 +116,15 @@ public class MainApp extends Application {
 
     private Node dashboard() throws Exception {
         VBox v=page("Resumen de la cafetería","Hola, "+usuario+". Aquí tienes el estado de tu negocio.");
-        List<Producto> ps=dao.listar(); long bajos=ps.stream().filter(p->p.stock()<=p.minimo()).count();
-        int ventasHoy=0; BigDecimal ingresosHoy=BigDecimal.ZERO; int ventasTotal=0;
-        try(Connection c=Database.open();Statement s=c.createStatement();ResultSet r=s.executeQuery("SELECT COUNT(*),COALESCE(SUM(total),0) FROM ventas WHERE CAST(fecha AS DATE)=CURRENT_DATE")){r.next();ventasHoy=r.getInt(1);ingresosHoy=r.getBigDecimal(2);}
-        try(Connection c=Database.open();Statement s=c.createStatement();ResultSet r=s.executeQuery("SELECT COUNT(*) FROM ventas")){r.next();ventasTotal=r.getInt(1);}
+        List<Producto> ps=productoService.listar(); long bajos=ps.stream().filter(p->p.stock()<=p.minimo()).count();
+        
+        // --- SQL REEMPLAZADO POR LLAMADAS AL SERVICIO ---
+        IVentaDao.ResumenVentas resumenHoy = ventas.obtenerResumenHoy();
+        int ventasHoy = resumenHoy.cantidad();
+        BigDecimal ingresosHoy = resumenHoy.total();
+        int ventasTotal = ventas.obtenerTotalVentasHistoricas();
+        // --------------------------------------------------
+
         HBox metrics=new HBox(14); metrics.getChildren().addAll(metric("Ventas de hoy",""+ventasHoy,"▣","#E5F0E9"),metric("Ingresos de hoy","S/ "+ingresosHoy.toPlainString(),"S/","#F9EEDC"),metric("Productos activos",""+ps.size(),"☕","#E7ECF8"),metric("Stock por revisar",""+bajos,"!",bajos>0?"#F9E5E1":"#E5F0E9"));
         for(Node n:metrics.getChildren()) HBox.setHgrow(n,Priority.ALWAYS);
         VBox low=card(); low.getChildren().addAll(new Label("Inventario que necesita atención"),subtitle("Productos que llegaron al mínimo o están por debajo."));
@@ -123,15 +140,15 @@ public class MainApp extends Application {
     private Node productos() throws Exception {
         VBox v=page("Productos","Administra el menú, precios y stock inicial de cada producto.");
         TableView<Producto> t=productTable(); TextField search=new TextField();search.setPromptText("Buscar por nombre o categoría...");
-        List<Producto> all=new ArrayList<>(dao.listar()); t.getItems().setAll(all); search.textProperty().addListener((o,a,b)->t.getItems().setAll(all.stream().filter(p->(p.nombre()+" "+p.categoria()).toLowerCase().contains(b.toLowerCase())).toList()));
+        List<Producto> all=new ArrayList<>(productoService.listar()); t.getItems().setAll(all); search.textProperty().addListener((o,a,b)->t.getItems().setAll(all.stream().filter(p->(p.nombre()+" "+p.categoria()).toLowerCase().contains(b.toLowerCase())).toList()));
         TextField nombre=new TextField();nombre.setPromptText("Nombre del producto"); ComboBox<String> cat=new ComboBox<>(FXCollections.observableArrayList("Café caliente","Café frío","Bebidas especiales","Té e infusiones","Panadería","Postres","Sándwiches","Otros"));cat.setPromptText("Categoría");cat.setPrefWidth(180);
         TextField precio=new TextField();precio.setPromptText("Precio S/");TextField stock=new TextField();stock.setPromptText("Stock inicial");TextField minimo=new TextField("5");minimo.setPromptText("Mínimo");
         HBox fields=new HBox(8,nombre,cat,precio,stock,minimo);for(Node n:fields.getChildren())if(n instanceof TextField)HBox.setHgrow(n,Priority.ALWAYS);
         Button save=primary("Guardar producto");Button update=secondary("Actualizar seleccionado");Button deactivate=secondary("Desactivar");Button clear=secondary("Limpiar");
-        Runnable refresh=()->{try{all.clear();all.addAll(dao.listar());t.getItems().setAll(all);search.clear();}catch(Exception ex){error(ex);}};
-        save.setOnAction(e->run(()->{validateProduct(nombre,cat,precio,stock,minimo);dao.guardar(null,nombre.getText().trim(),cat.getValue(),new BigDecimal(precio.getText()),Integer.parseInt(stock.getText()),Integer.parseInt(minimo.getText()));refresh.run();clearFields(nombre,cat,precio,stock,minimo);}));
-        update.setOnAction(e->run(()->{Producto p=selected(t);validateProduct(nombre,cat,precio,stock,minimo);dao.guardar(p.id(),nombre.getText().trim(),cat.getValue(),new BigDecimal(precio.getText()),Integer.parseInt(stock.getText()),Integer.parseInt(minimo.getText()));refresh.run();}));
-        deactivate.setOnAction(e->run(()->{Producto p=selected(t);Alert a=new Alert(Alert.AlertType.CONFIRMATION,"¿Desactivar "+p.nombre()+"?",ButtonType.CANCEL,ButtonType.OK);a.setHeaderText("Confirmar acción");if(a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK) {dao.desactivar(p.id());refresh.run();}}));
+        Runnable refresh=()->{try{all.clear();all.addAll(productoService.listar());t.getItems().setAll(all);search.clear();}catch(Exception ex){error(ex);}};
+        save.setOnAction(e->run(()->{validateProduct(nombre,cat,precio,stock,minimo);productoService.guardar(null,nombre.getText().trim(),cat.getValue(),new BigDecimal(precio.getText()),Integer.parseInt(stock.getText()),Integer.parseInt(minimo.getText()));refresh.run();clearFields(nombre,cat,precio,stock,minimo);}));
+        update.setOnAction(e->run(()->{Producto p=selected(t);validateProduct(nombre,cat,precio,stock,minimo);productoService.guardar(p.id(),nombre.getText().trim(),cat.getValue(),new BigDecimal(precio.getText()),Integer.parseInt(stock.getText()),Integer.parseInt(minimo.getText()));refresh.run();}));
+        deactivate.setOnAction(e->run(()->{Producto p=selected(t);Alert a=new Alert(Alert.AlertType.CONFIRMATION,"¿Desactivar "+p.nombre()+"?",ButtonType.CANCEL,ButtonType.OK);a.setHeaderText("Confirmar acción");if(a.showAndWait().orElse(ButtonType.CANCEL)==ButtonType.OK) {productoService.desactivar(p.id());refresh.run();}}));
         clear.setOnAction(e->clearFields(nombre,cat,precio,stock,minimo));
         t.getSelectionModel().selectedItemProperty().addListener((o,a,p)->{if(p!=null){nombre.setText(p.nombre());cat.setValue(p.categoria());precio.setText(p.precio().toPlainString());stock.setText(""+p.stock());minimo.setText(""+p.minimo());}});
         if(!"ADMIN".equals(rol)){save.setDisable(true);update.setDisable(true);deactivate.setDisable(true);}
@@ -144,18 +161,18 @@ public class MainApp extends Application {
     private Producto selected(TableView<Producto> t){Producto p=t.getSelectionModel().getSelectedItem();if(p==null)throw new IllegalArgumentException("Selecciona primero un producto de la tabla.");return p;}
 
     private Node inventario() throws Exception {
-        VBox v=page("Inventario","Controla existencias, identifica alertas y registra reposiciones.");List<Producto> ps=dao.listar();long low=ps.stream().filter(p->p.stock()<=p.minimo()).count();long zero=ps.stream().filter(p->p.stock()==0).count();
+        VBox v=page("Inventario","Controla existencias, identifica alertas y registra reposiciones.");List<Producto> ps=productoService.listar();long low=ps.stream().filter(p->p.stock()<=p.minimo()).count();long zero=ps.stream().filter(p->p.stock()==0).count();
         HBox stats=new HBox(12,metric("Productos en alerta",""+low,"!","#F9EEDC"),metric("Agotados",""+zero,"×","#F9E5E1"),metric("Productos controlados",""+ps.size(),"▤",GREEN_LIGHT));for(Node n:stats.getChildren())HBox.setHgrow(n,Priority.ALWAYS);
         TableView<Producto> t=productTable();t.getItems().setAll(ps);TextField amount=new TextField();amount.setPromptText("Unidades a ingresar o retirar");TextField reason=new TextField();reason.setPromptText("Motivo (compra, merma, ajuste...)");HBox.setHgrow(reason,Priority.ALWAYS);
         Label hint=subtitle("Para reponer, escribe una cantidad positiva. Para retirar unidades, escribe una cantidad negativa.");Button add=primary("Registrar movimiento");
-        add.setOnAction(e->run(()->{Producto p=selected(t);if(reason.getText().isBlank())throw new IllegalArgumentException("Indica el motivo del movimiento.");int delta=Integer.parseInt(amount.getText().trim());if(delta==0)throw new IllegalArgumentException("La cantidad no puede ser cero.");dao.ajustar(p.id(),delta,reason.getText().trim());t.getItems().setAll(dao.listar());amount.clear();reason.clear();new Alert(Alert.AlertType.INFORMATION,"Inventario actualizado correctamente.").showAndWait();}));if(!"ADMIN".equals(rol))add.setDisable(true);
+        add.setOnAction(e->run(()->{Producto p=selected(t);if(reason.getText().isBlank())throw new IllegalArgumentException("Indica el motivo del movimiento.");int delta=Integer.parseInt(amount.getText().trim());if(delta==0)throw new IllegalArgumentException("La cantidad no puede ser cero.");productoService.ajustar(p.id(),delta,reason.getText().trim());t.getItems().setAll(productoService.listar());amount.clear();reason.clear();new Alert(Alert.AlertType.INFORMATION,"Inventario actualizado correctamente.").showAndWait();}));if(!"ADMIN".equals(rol))add.setDisable(true);
         VBox movement=card();movement.getChildren().addAll(new Label("Registrar entrada o salida"),hint,new HBox(10,amount,reason,add));v.getChildren().addAll(stats,cardWithTable("Existencias actuales",t),movement);return v;
     }
     private VBox cardWithTable(String heading,Node child){VBox b=card();b.getChildren().addAll(new Label(heading),child);return b;}
 
     private record CartItem(Producto producto,int cantidad) { BigDecimal subtotal(){return producto.precio().multiply(BigDecimal.valueOf(cantidad));} }
     private Node venta() throws Exception {
-        VBox v=page("Nueva venta","Busca un producto, agrégalo al carrito y confirma el cobro.");List<Producto> available=dao.listar();
+        VBox v=page("Nueva venta","Busca un producto, agrégalo al carrito y confirma el cobro.");List<Producto> available=productoService.listar();
         TextField search=new TextField();search.setPromptText("Buscar café, postre, bebida...");ComboBox<String> category=new ComboBox<>();category.getItems().add("Todas las categorías");available.stream().map(Producto::categoria).distinct().sorted().forEach(category.getItems()::add);category.setValue("Todas las categorías");
         ListView<Producto> catalog=new ListView<>();catalog.setPrefHeight(250);catalog.setCellFactory(lv->new ListCell<>(){@Override protected void updateItem(Producto p,boolean empty){super.updateItem(p,empty);if(empty||p==null){setText(null);setGraphic(null);}else{Label n=new Label(p.nombre());n.setStyle("-fx-font-weight:bold;-fx-text-fill:"+TEXT+";");Label d=new Label(p.categoria()+"  ·  S/ "+p.precio().toPlainString()+"  ·  Stock: "+p.stock());d.setStyle("-fx-text-fill:"+MUTED+";-fx-font-size:11px;");VBox box=new VBox(4,n,d);box.setPadding(new Insets(5));setGraphic(box);setText(null);}}});
         Runnable filter=()->catalog.getItems().setAll(available.stream().filter(p->p.stock()>0).filter(p->category.getValue()==null||category.getValue().equals("Todas las categorías")||p.categoria().equals(category.getValue())).filter(p->(p.nombre()+" "+p.categoria()).toLowerCase().contains(search.getText().toLowerCase())).toList());search.textProperty().addListener((o,a,b)->filter.run());category.valueProperty().addListener((o,a,b)->filter.run());filter.run();
@@ -164,7 +181,7 @@ public class MainApp extends Application {
         Label total=new Label("Total: S/ 0.00");total.setStyle("-fx-font-size:24px;-fx-font-weight:800;-fx-text-fill:"+GREEN+";");
         add.setOnAction(e->{Producto p=catalog.getSelectionModel().getSelectedItem();if(p==null){new Alert(Alert.AlertType.WARNING,"Selecciona un producto del catálogo.").showAndWait();return;}int q=qty.getValue();int existing=cart.getItems().stream().filter(it->it.producto().id()==p.id()).mapToInt(CartItem::cantidad).sum();if(existing+q>p.stock()){new Alert(Alert.AlertType.WARNING,"Stock disponible: "+p.stock()+" unidades.").showAndWait();return;}Optional<CartItem> old=cart.getItems().stream().filter(it->it.producto().id()==p.id()).findFirst();if(old.isPresent()){int idx=cart.getItems().indexOf(old.get());cart.getItems().set(idx,new CartItem(p,old.get().cantidad()+q));}else cart.getItems().add(new CartItem(p,q));updateTotal(cart,total);});
         Button remove=secondary("Quitar seleccionado");remove.setOnAction(e->{CartItem item=cart.getSelectionModel().getSelectedItem();if(item!=null)cart.getItems().remove(item);updateTotal(cart,total);});Button clear=secondary("Vaciar carrito");clear.setOnAction(e->{cart.getItems().clear();updateTotal(cart,total);});
-        Button confirm=primary("Confirmar venta");confirm.setOnAction(e->run(()->{if(cart.getItems().isEmpty())throw new IllegalArgumentException("Agrega al menos un producto antes de confirmar.");List<VentaService.Linea> lines=cart.getItems().stream().map(it->new VentaService.Linea(it.producto().id(),it.cantidad())).toList();BigDecimal amount=cart.getItems().stream().map(CartItem::subtotal).reduce(BigDecimal.ZERO,BigDecimal::add);int id=ventas.vender(usuario,lines);Alert done=new Alert(Alert.AlertType.INFORMATION,"Venta #"+id+" registrada.\nTotal: S/ "+amount.toPlainString()+"\nEl inventario se actualizó correctamente.");done.setHeaderText("Venta completada");done.showAndWait();cart.getItems().clear();available.clear();available.addAll(dao.listar());filter.run();updateTotal(cart,total);}));
+        Button confirm=primary("Confirmar venta");confirm.setOnAction(e->run(()->{if(cart.getItems().isEmpty())throw new IllegalArgumentException("Agrega al menos un producto antes de confirmar.");List<VentaService.Linea> lines=cart.getItems().stream().map(it->new VentaService.Linea(it.producto().id(),it.cantidad())).toList();BigDecimal amount=cart.getItems().stream().map(CartItem::subtotal).reduce(BigDecimal.ZERO,BigDecimal::add);int id=ventas.vender(usuario,lines);Alert done=new Alert(Alert.AlertType.INFORMATION,"Venta #"+id+" registrada.\nTotal: S/ "+amount.toPlainString()+"\nEl inventario se actualizó correctamente.");done.setHeaderText("Venta completada");done.showAndWait();cart.getItems().clear();available.clear();available.addAll(productoService.listar());filter.run();updateTotal(cart,total);}));
         VBox left=card();left.getChildren().addAll(new Label("1. Catálogo de productos"),new HBox(8,search,category),catalog,new HBox(8,new Label("Cantidad"),qty,add));VBox right=card();right.getChildren().addAll(new Label("2. Resumen de la venta"),cart,new HBox(8,remove,clear),total,confirm);HBox layout=new HBox(14,left,right);HBox.setHgrow(left,Priority.ALWAYS);HBox.setHgrow(right,Priority.ALWAYS);left.setPrefWidth(560);right.setPrefWidth(520);v.getChildren().add(layout);return v;
     }
     private void updateTotal(TableView<CartItem> cart,Label total){BigDecimal sum=cart.getItems().stream().map(CartItem::subtotal).reduce(BigDecimal.ZERO,BigDecimal::add);total.setText("Total: S/ "+sum.setScale(2,java.math.RoundingMode.HALF_UP).toPlainString());}
@@ -173,7 +190,23 @@ public class MainApp extends Application {
         VBox v=page("Historial y reportes","Consulta las ventas registradas y exporta el resumen a Excel.");DatePicker from=new DatePicker(LocalDate.now().withDayOfMonth(1));DatePicker to=new DatePicker(LocalDate.now());TextField userFilter=new TextField();userFilter.setPromptText("Filtrar por usuario (opcional)");Button search=primary("Aplicar filtros");Button reset=secondary("Este mes");
         TableView<String[]> t=new TableView<>();String[] cols={"N.º venta","Fecha y hora","Usuario","Total"};for(int i=0;i<cols.length;i++){final int idx=i;TableColumn<String[],String> c=new TableColumn<>(cols[i]);c.setCellValueFactory(x->new SimpleStringProperty(x.getValue()[idx]));c.setPrefWidth(new double[]{95,220,150,120}[i]);t.getColumns().add(c);}t.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);t.setPrefHeight(330);
         Label count=new Label();Label sum=new Label();sum.setStyle("-fx-font-size:21px;-fx-font-weight:800;-fx-text-fill:"+GREEN+";");
-        Runnable load=()->run(()->{t.getItems().clear();StringBuilder sql=new StringBuilder("SELECT id,fecha,usuario,total FROM ventas WHERE CAST(fecha AS DATE)>=? AND CAST(fecha AS DATE)<=?");if(!userFilter.getText().isBlank())sql.append(" AND LOWER(usuario) LIKE ?");sql.append(" ORDER BY id DESC");BigDecimal total=BigDecimal.ZERO;try(Connection c=Database.open();PreparedStatement p=c.prepareStatement(sql.toString())){p.setDate(1,java.sql.Date.valueOf(from.getValue()));p.setDate(2,java.sql.Date.valueOf(to.getValue()));if(!userFilter.getText().isBlank())p.setString(3,"%"+userFilter.getText().trim().toLowerCase()+"%");try(ResultSet r=p.executeQuery()){while(r.next()){String amount=r.getBigDecimal("total").toPlainString();t.getItems().add(new String[]{r.getString("id"),r.getString("fecha"),r.getString("usuario"),"S/ "+amount});total=total.add(new BigDecimal(amount));}}}count.setText("Ventas encontradas: "+t.getItems().size());sum.setText("Total vendido: S/ "+total.setScale(2,java.math.RoundingMode.HALF_UP).toPlainString());});
+        
+        // --- SQL REEMPLAZADO POR LLAMADAS AL SERVICIO ---
+        Runnable load = () -> run(() -> {
+            t.getItems().clear();
+            List<String[]> listaVentas = ventas.buscarVentas(from.getValue(), to.getValue(), userFilter.getText());
+            BigDecimal total = BigDecimal.ZERO;
+            
+            for (String[] venta : listaVentas) {
+                t.getItems().add(new String[]{venta[0], venta[1], venta[2], "S/ " + venta[3]});
+                total = total.add(new BigDecimal(venta[3]));
+            }
+            
+            count.setText("Ventas encontradas: " + t.getItems().size());
+            sum.setText("Total vendido: S/ " + total.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString());
+        });
+        // --------------------------------------------------
+
         search.setOnAction(e->{if(from.getValue()==null||to.getValue()==null||from.getValue().isAfter(to.getValue())){new Alert(Alert.AlertType.WARNING,"Selecciona un rango de fechas válido.").showAndWait();return;}load.run();});reset.setOnAction(e->{from.setValue(LocalDate.now().withDayOfMonth(1));to.setValue(LocalDate.now());userFilter.clear();load.run();});
         Button export=secondary("Exportar a Excel (.xlsx)");export.setOnAction(e->run(()->{if(t.getItems().isEmpty())throw new IllegalArgumentException("No hay ventas para exportar con los filtros actuales.");FileChooser f=new FileChooser();f.setInitialFileName("reporte_cafegest.xlsx");f.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel (*.xlsx)","*.xlsx"));File file=f.showSaveDialog(stage);if(file==null)return;exportarVentasExcel(t.getItems(),cols,from.getValue(),to.getValue(),userFilter.getText().trim(),file);new Alert(Alert.AlertType.INFORMATION,"Reporte exportado correctamente.").showAndWait();}));
         VBox filters=card();filters.getChildren().addAll(new Label("Filtros de consulta"),new HBox(10,new VBox(5,subtitle("Desde"),from),new VBox(5,subtitle("Hasta"),to),new VBox(5,subtitle("Usuario"),userFilter),search,reset));VBox summary=card();summary.getChildren().addAll(count,sum);VBox history=card();history.getChildren().addAll(new Label("Detalle de ventas"),t,new HBox(export));v.getChildren().addAll(filters,summary,history);load.run();return v;
