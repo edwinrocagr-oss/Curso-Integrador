@@ -1,6 +1,6 @@
 # CaféGest - Sistema de gestión de cafetería
 
-Proyecto académico de escritorio con Java 17, JavaFX, Maven y PostgreSQL. Maneja productos terminados, inventario y ventas.
+Proyecto académico de escritorio con Java 17, JavaFX, Maven, Guava y PostgreSQL. Maneja productos terminados, inventario y ventas. Guava se utiliza para mantener inmutable el catálogo de productos de demostración.
 
 ## Requisitos
 
@@ -42,6 +42,6 @@ Para compartir ventas e inventario, todos deben conectarse a **la misma instanci
 - Alta, edicion y baja logica de productos.
 - Ajustes de inventario y registro de movimientos.
 - Ventas transaccionales con validación y descuento de stock.
-- Resumen, historial con filtros y exportación a Excel.
+- Resumen, historial con filtros y exportación a Excel con fechas y montos numéricos, filtros de columna y total calculado.
 
 La administración de usuarios desde la interfaz, los reportes avanzados, los tickets imprimibles y las pruebas de integración siguen pendientes.

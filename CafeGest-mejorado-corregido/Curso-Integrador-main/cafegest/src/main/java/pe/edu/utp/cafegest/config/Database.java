@@ -1,12 +1,39 @@
 package pe.edu.utp.cafegest.config;
 
+import com.google.common.collect.ImmutableList;
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigDecimal;
 import java.sql.*;
 import java.util.Properties;
 
 /** Fuente de conexiones PostgreSQL y creación inicial del esquema. */
 public final class Database {
+    private record DemoProduct(String nombre, String categoria, BigDecimal precio, int stock, int minimo) {}
+
+    private static final ImmutableList<DemoProduct> DEMO_PRODUCTS = ImmutableList.of(
+        new DemoProduct("Espresso", "Café caliente", new BigDecimal("7.00"), 45, 8),
+        new DemoProduct("Americano", "Café caliente", new BigDecimal("8.50"), 40, 8),
+        new DemoProduct("Cappuccino", "Café caliente", new BigDecimal("11.50"), 30, 6),
+        new DemoProduct("Latte vainilla", "Café caliente", new BigDecimal("13.00"), 28, 6),
+        new DemoProduct("Moca", "Café caliente", new BigDecimal("13.50"), 24, 5),
+        new DemoProduct("Caramel macchiato", "Bebidas especiales", new BigDecimal("15.00"), 20, 5),
+        new DemoProduct("Chocolate caliente", "Bebidas especiales", new BigDecimal("10.50"), 18, 5),
+        new DemoProduct("Matcha latte", "Bebidas especiales", new BigDecimal("14.50"), 16, 4),
+        new DemoProduct("Cold brew", "Café frío", new BigDecimal("12.00"), 22, 5),
+        new DemoProduct("Iced latte", "Café frío", new BigDecimal("12.50"), 25, 5),
+        new DemoProduct("Frappé de moka", "Café frío", new BigDecimal("15.50"), 18, 5),
+        new DemoProduct("Té chai latte", "Té e infusiones", new BigDecimal("12.00"), 15, 4),
+        new DemoProduct("Té verde", "Té e infusiones", new BigDecimal("7.50"), 20, 5),
+        new DemoProduct("Croissant de mantequilla", "Panadería", new BigDecimal("6.50"), 18, 5),
+        new DemoProduct("Muffin de arándanos", "Panadería", new BigDecimal("7.50"), 14, 4),
+        new DemoProduct("Cookie de chocolate", "Postres", new BigDecimal("5.00"), 30, 8),
+        new DemoProduct("Brownie de chocolate", "Postres", new BigDecimal("6.50"), 16, 5),
+        new DemoProduct("Cheesecake", "Postres", new BigDecimal("11.00"), 10, 3),
+        new DemoProduct("Sándwich de pollo", "Sándwiches", new BigDecimal("14.50"), 12, 4),
+        new DemoProduct("Panini caprese", "Sándwiches", new BigDecimal("13.50"), 10, 3)
+    );
+
     private Database() {}
     public static Connection open() throws SQLException {
         Properties config = loadConfig();
@@ -50,32 +77,14 @@ public final class Database {
             try (ResultSet r = s.executeQuery("SELECT COUNT(*) FROM productos WHERE activo=TRUE")) {
                 r.next();
                 if (r.getInt(1) == 0) {
-                    String[][] catalogo = {
-                        {"Espresso","Café caliente","7.00","45","8"},
-                        {"Americano","Café caliente","8.50","40","8"},
-                        {"Cappuccino","Café caliente","11.50","30","6"},
-                        {"Latte vainilla","Café caliente","13.00","28","6"},
-                        {"Moca","Café caliente","13.50","24","5"},
-                        {"Caramel macchiato","Bebidas especiales","15.00","20","5"},
-                        {"Chocolate caliente","Bebidas especiales","10.50","18","5"},
-                        {"Matcha latte","Bebidas especiales","14.50","16","4"},
-                        {"Cold brew","Café frío","12.00","22","5"},
-                        {"Iced latte","Café frío","12.50","25","5"},
-                        {"Frappé de moka","Café frío","15.50","18","5"},
-                        {"Té chai latte","Té e infusiones","12.00","15","4"},
-                        {"Té verde","Té e infusiones","7.50","20","5"},
-                        {"Croissant de mantequilla","Panadería","6.50","18","5"},
-                        {"Muffin de arándanos","Panadería","7.50","14","4"},
-                        {"Cookie de chocolate","Postres","5.00","30","8"},
-                        {"Brownie de chocolate","Postres","6.50","16","5"},
-                        {"Cheesecake","Postres","11.00","10","3"},
-                        {"Sándwich de pollo","Sándwiches","14.50","12","4"},
-                        {"Panini caprese","Sándwiches","13.50","10","3"}
-                    };
                     try (PreparedStatement p = c.prepareStatement("INSERT INTO productos(nombre,categoria,precio,stock,minimo) VALUES(?,?,?,?,?)")) {
-                        for (String[] item : catalogo) {
-                            p.setString(1,item[0]); p.setString(2,item[1]); p.setBigDecimal(3,new java.math.BigDecimal(item[2]));
-                            p.setInt(4,Integer.parseInt(item[3])); p.setInt(5,Integer.parseInt(item[4])); p.addBatch();
+                        for (DemoProduct item : DEMO_PRODUCTS) {
+                            p.setString(1, item.nombre());
+                            p.setString(2, item.categoria());
+                            p.setBigDecimal(3, item.precio());
+                            p.setInt(4, item.stock());
+                            p.setInt(5, item.minimo());
+                            p.addBatch();
                         }
                         p.executeBatch();
                     }

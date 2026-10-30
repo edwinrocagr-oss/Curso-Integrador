@@ -19,6 +19,7 @@ import pe.edu.utp.cafegest.service.AuthService;
 import pe.edu.utp.cafegest.service.VentaService;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.math.BigDecimal;
@@ -174,8 +175,38 @@ public class MainApp extends Application {
         Label count=new Label();Label sum=new Label();sum.setStyle("-fx-font-size:21px;-fx-font-weight:800;-fx-text-fill:"+GREEN+";");
         Runnable load=()->run(()->{t.getItems().clear();StringBuilder sql=new StringBuilder("SELECT id,fecha,usuario,total FROM ventas WHERE CAST(fecha AS DATE)>=? AND CAST(fecha AS DATE)<=?");if(!userFilter.getText().isBlank())sql.append(" AND LOWER(usuario) LIKE ?");sql.append(" ORDER BY id DESC");BigDecimal total=BigDecimal.ZERO;try(Connection c=Database.open();PreparedStatement p=c.prepareStatement(sql.toString())){p.setDate(1,java.sql.Date.valueOf(from.getValue()));p.setDate(2,java.sql.Date.valueOf(to.getValue()));if(!userFilter.getText().isBlank())p.setString(3,"%"+userFilter.getText().trim().toLowerCase()+"%");try(ResultSet r=p.executeQuery()){while(r.next()){String amount=r.getBigDecimal("total").toPlainString();t.getItems().add(new String[]{r.getString("id"),r.getString("fecha"),r.getString("usuario"),"S/ "+amount});total=total.add(new BigDecimal(amount));}}}count.setText("Ventas encontradas: "+t.getItems().size());sum.setText("Total vendido: S/ "+total.setScale(2,java.math.RoundingMode.HALF_UP).toPlainString());});
         search.setOnAction(e->{if(from.getValue()==null||to.getValue()==null||from.getValue().isAfter(to.getValue())){new Alert(Alert.AlertType.WARNING,"Selecciona un rango de fechas válido.").showAndWait();return;}load.run();});reset.setOnAction(e->{from.setValue(LocalDate.now().withDayOfMonth(1));to.setValue(LocalDate.now());userFilter.clear();load.run();});
-        Button export=secondary("Exportar a Excel (.xlsx)");export.setOnAction(e->run(()->{if(t.getItems().isEmpty())throw new IllegalArgumentException("No hay ventas para exportar con los filtros actuales.");FileChooser f=new FileChooser();f.setInitialFileName("reporte_cafegest.xlsx");f.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel (*.xlsx)","*.xlsx"));File file=f.showSaveDialog(stage);if(file==null)return;try(XSSFWorkbook wb=new XSSFWorkbook();FileOutputStream out=new FileOutputStream(file)){Sheet sh=wb.createSheet("Ventas");Row h=sh.createRow(0);for(int i=0;i<cols.length;i++)h.createCell(i).setCellValue(cols[i]);int row=1;for(String[] values:t.getItems()){Row rr=sh.createRow(row++);for(int i=0;i<values.length;i++)rr.createCell(i).setCellValue(values[i]);}for(int i=0;i<cols.length;i++)sh.autoSizeColumn(i);wb.write(out);}new Alert(Alert.AlertType.INFORMATION,"Reporte exportado correctamente.").showAndWait();}));
+        Button export=secondary("Exportar a Excel (.xlsx)");export.setOnAction(e->run(()->{if(t.getItems().isEmpty())throw new IllegalArgumentException("No hay ventas para exportar con los filtros actuales.");FileChooser f=new FileChooser();f.setInitialFileName("reporte_cafegest.xlsx");f.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel (*.xlsx)","*.xlsx"));File file=f.showSaveDialog(stage);if(file==null)return;exportarVentasExcel(t.getItems(),cols,from.getValue(),to.getValue(),userFilter.getText().trim(),file);new Alert(Alert.AlertType.INFORMATION,"Reporte exportado correctamente.").showAndWait();}));
         VBox filters=card();filters.getChildren().addAll(new Label("Filtros de consulta"),new HBox(10,new VBox(5,subtitle("Desde"),from),new VBox(5,subtitle("Hasta"),to),new VBox(5,subtitle("Usuario"),userFilter),search,reset));VBox summary=card();summary.getChildren().addAll(count,sum);VBox history=card();history.getChildren().addAll(new Label("Detalle de ventas"),t,new HBox(export));v.getChildren().addAll(filters,summary,history);load.run();return v;
+    }
+    private void exportarVentasExcel(List<String[]> ventasExportadas,String[] columnas,LocalDate desde,LocalDate hasta,String usuarioFiltrado,File archivo)throws Exception{
+        try(XSSFWorkbook wb=new XSSFWorkbook();FileOutputStream out=new FileOutputStream(archivo)){
+            Sheet hoja=wb.createSheet("Ventas");
+            Font tituloFont=wb.createFont();tituloFont.setBold(true);tituloFont.setFontHeightInPoints((short)16);tituloFont.setColor(IndexedColors.WHITE.getIndex());
+            CellStyle tituloStyle=wb.createCellStyle();tituloStyle.setFont(tituloFont);tituloStyle.setFillForegroundColor(IndexedColors.DARK_GREEN.getIndex());tituloStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            Row titulo=hoja.createRow(0);titulo.setHeightInPoints(28);org.apache.poi.ss.usermodel.Cell tituloCelda=titulo.createCell(0);tituloCelda.setCellValue("CaféGest | Reporte de ventas");tituloCelda.setCellStyle(tituloStyle);hoja.addMergedRegion(new CellRangeAddress(0,0,0,columnas.length-1));
+            Row filtros=hoja.createRow(1);String detalleFiltros="Periodo: "+desde+" al "+hasta+(usuarioFiltrado.isBlank()?"":" | Usuario: "+usuarioFiltrado);filtros.createCell(0).setCellValue(detalleFiltros);hoja.addMergedRegion(new CellRangeAddress(1,1,0,columnas.length-1));
+            Font encabezadoFont=wb.createFont();encabezadoFont.setBold(true);encabezadoFont.setColor(IndexedColors.DARK_GREEN.getIndex());
+            CellStyle encabezadoStyle=wb.createCellStyle();encabezadoStyle.setFont(encabezadoFont);encabezadoStyle.setFillForegroundColor(IndexedColors.LIGHT_GREEN.getIndex());encabezadoStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            Row encabezado=hoja.createRow(2);for(int i=0;i<columnas.length;i++){org.apache.poi.ss.usermodel.Cell celda=encabezado.createCell(i);celda.setCellValue(columnas[i]);celda.setCellStyle(encabezadoStyle);}
+            CellStyle fechaStyle=wb.createCellStyle();fechaStyle.setDataFormat(wb.createDataFormat().getFormat("dd/mm/yyyy hh:mm"));
+            CellStyle montoStyle=wb.createCellStyle();montoStyle.setDataFormat(wb.createDataFormat().getFormat("\"S/ \"#,##0.00"));
+            int fila=3;
+            for(String[] venta:ventasExportadas){
+                Row registro=hoja.createRow(fila++);
+                registro.createCell(0).setCellValue(Long.parseLong(venta[0]));
+                org.apache.poi.ss.usermodel.Cell fecha=registro.createCell(1);fecha.setCellValue(Timestamp.valueOf(venta[1]));fecha.setCellStyle(fechaStyle);
+                registro.createCell(2).setCellValue(venta[2]);
+                org.apache.poi.ss.usermodel.Cell monto=registro.createCell(3);monto.setCellValue(new BigDecimal(venta[3].replace("S/ ","")).doubleValue());monto.setCellStyle(montoStyle);
+            }
+            int ultimaFilaDatos=fila-1;
+            hoja.setAutoFilter(new CellRangeAddress(2,ultimaFilaDatos,0,columnas.length-1));hoja.createFreezePane(0,3);
+            Font totalFont=wb.createFont();totalFont.setBold(true);
+            CellStyle totalStyle=wb.createCellStyle();totalStyle.setFont(totalFont);
+            Row total=hoja.createRow(fila);org.apache.poi.ss.usermodel.Cell etiquetaTotal=total.createCell(0);etiquetaTotal.setCellValue("Total de ventas");etiquetaTotal.setCellStyle(totalStyle);hoja.addMergedRegion(new CellRangeAddress(fila,fila,0,2));
+            org.apache.poi.ss.usermodel.Cell suma=total.createCell(3);suma.setCellFormula("SUM(D4:D"+(ultimaFilaDatos+1)+")");suma.setCellStyle(montoStyle);
+            for(int i=0;i<columnas.length;i++){hoja.autoSizeColumn(i);hoja.setColumnWidth(i,Math.min(hoja.getColumnWidth(i)+512,40*256));}
+            wb.write(out);
+        }
     }
     private interface Action { void run() throws Exception; }
     private void run(Action a){try{a.run();}catch(Exception e){error(e);}}
