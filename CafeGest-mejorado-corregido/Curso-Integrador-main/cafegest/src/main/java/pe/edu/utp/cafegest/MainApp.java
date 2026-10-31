@@ -23,6 +23,7 @@ import pe.edu.utp.cafegest.dao.ComandaDaoImpl;
 import pe.edu.utp.cafegest.model.Producto;
 import pe.edu.utp.cafegest.model.Usuario;
 import pe.edu.utp.cafegest.model.Comanda;
+import pe.edu.utp.cafegest.model.EstadoComanda;
 import pe.edu.utp.cafegest.service.AuthService;
 import pe.edu.utp.cafegest.service.VentaService;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -63,9 +64,8 @@ public class MainApp extends Application {
 
     // Servicio proxy temporal para ComandaDao
     private final IComandaDao comandaService = new IComandaDao() {
-        @Override public List<Comanda> listarPendientes() throws SQLException { try(Connection c=Database.open()){return new ComandaDaoImpl(c).listarPendientes();} }
-        @Override public void registrar(String m, String p) throws SQLException { try(Connection c=Database.open()){new ComandaDaoImpl(c).registrar(m,p);} }
-        @Override public void marcarCompletada(int id) throws SQLException { try(Connection c=Database.open()){new ComandaDaoImpl(c).marcarCompletada(id);} }
+        @Override public List<Comanda> listarActivas() throws SQLException { try(Connection c=Database.open()){return new ComandaDaoImpl(c).listarActivas();} }
+        @Override public void cambiarEstado(int id, EstadoComanda actual, EstadoComanda siguiente) throws SQLException { try(Connection c=Database.open()){new ComandaDaoImpl(c).cambiarEstado(id,actual,siguiente);} }
     };
 
     private Stage stage;
@@ -215,6 +215,9 @@ public class MainApp extends Application {
     private record CartItem(Producto producto,int cantidad) { BigDecimal subtotal(){return producto.precio().multiply(BigDecimal.valueOf(cantidad));} }
     private Node venta() throws Exception {
         VBox v=page("Nueva venta","Busca un producto, agrégalo al carrito y confirma el cobro.");List<Producto> available=productoService.listar();
+        TextField mesaCliente = new TextField("Para llevar");
+        mesaCliente.setPromptText("Mesa o cliente (opcional)");
+        mesaCliente.setMaxWidth(360);
         TextField search=new TextField();search.setPromptText("Buscar café, postre, bebida...");ComboBox<String> category=new ComboBox<>();category.getItems().add("Todas las categorías");available.stream().map(Producto::categoria).distinct().sorted().forEach(category.getItems()::add);category.setValue("Todas las categorías");
         ListView<Producto> catalog=new ListView<>();catalog.setPrefHeight(250);catalog.setCellFactory(lv->new ListCell<>(){@Override protected void updateItem(Producto p,boolean empty){super.updateItem(p,empty);if(empty||p==null){setText(null);setGraphic(null);}else{Label n=new Label(p.nombre());n.setStyle("-fx-font-weight:bold;-fx-text-fill:"+TEXT+";");Label d=new Label(p.categoria()+"  ·  S/ "+p.precio().toPlainString()+"  ·  Stock: "+p.stock());d.setStyle("-fx-text-fill:"+MUTED+";-fx-font-size:11px;");VBox box=new VBox(4,n,d);box.setPadding(new Insets(5));setGraphic(box);setText(null);}}});
         Runnable filter=()->catalog.getItems().setAll(available.stream().filter(p->p.stock()>0).filter(p->category.getValue()==null||category.getValue().equals("Todas las categorías")||p.categoria().equals(category.getValue())).filter(p->(p.nombre()+" "+p.categoria()).toLowerCase().contains(search.getText().toLowerCase())).toList());search.textProperty().addListener((o,a,b)->filter.run());category.valueProperty().addListener((o,a,b)->filter.run());filter.run();
@@ -228,11 +231,8 @@ public class MainApp extends Application {
             if (cart.getItems().isEmpty()) throw new IllegalArgumentException("Agrega al menos un producto antes de confirmar.");
             List<VentaService.Linea> lines = cart.getItems().stream().map(it -> new VentaService.Linea(it.producto().id(), it.cantidad())).toList();
             BigDecimal amount = cart.getItems().stream().map(CartItem::subtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
-            int id = ventas.vender(usuario, lines);
-            StringBuilder resumenPedido = new StringBuilder();
-            for (CartItem item : cart.getItems()) {resumenPedido.append(item.cantidad()).append("x ").append(item.producto().nombre()).append(" | ");}
-            comandaService.registrar("Venta #" + id + " (" + usuario + ")", resumenPedido.toString());
-            Alert done = new Alert(Alert.AlertType.INFORMATION, "Venta #" + id + " cobrada.\nTotal: S/ " + amount.toPlainString() + "\nTicket enviado a cocina automáticamente.");
+            int id = ventas.vender(usuario, lines, mesaCliente.getText());
+            Alert done = new Alert(Alert.AlertType.INFORMATION, "Venta #" + id + " cobrada.\nTotal: S/ " + amount.toPlainString() + "\nComanda #" + id + " enviada a cocina.");
             done.setHeaderText("Venta completada");
             done.showAndWait();
             
@@ -241,7 +241,12 @@ public class MainApp extends Application {
             available.addAll(productoService.listar());
             filter.run();
             updateTotal(cart, total);
-        }));        VBox left=card();left.getChildren().addAll(new Label("1. Catálogo de productos"),new HBox(8,search,category),catalog,new HBox(8,new Label("Cantidad"),qty,add));VBox right=card();right.getChildren().addAll(new Label("2. Resumen de la venta"),cart,new HBox(8,remove,clear),total,confirm);HBox layout=new HBox(14,left,right);HBox.setHgrow(left,Priority.ALWAYS);HBox.setHgrow(right,Priority.ALWAYS);left.setPrefWidth(560);right.setPrefWidth(520);v.getChildren().add(layout);return v;
+        }));
+        VBox left=card();left.getChildren().addAll(new Label("1. Catálogo de productos"),new HBox(8,search,category),catalog,new HBox(8,new Label("Cantidad"),qty,add));
+        VBox right=card();right.getChildren().addAll(new Label("2. Resumen de la venta"),cart,new HBox(8,remove,clear),total,confirm);
+        HBox layout=new HBox(14,left,right);HBox.setHgrow(left,Priority.ALWAYS);HBox.setHgrow(right,Priority.ALWAYS);left.setPrefWidth(560);right.setPrefWidth(520);
+        v.getChildren().addAll(new HBox(10,new Label("Mesa / cliente:"),mesaCliente),layout);
+        return v;
     }
     private void updateTotal(TableView<CartItem> cart,Label total){BigDecimal sum=cart.getItems().stream().map(CartItem::subtotal).reduce(BigDecimal.ZERO,BigDecimal::add);total.setText("Total: S/ "+sum.setScale(2,java.math.RoundingMode.HALF_UP).toPlainString());}
 
@@ -344,66 +349,85 @@ public class MainApp extends Application {
         return v;
     }
 
-    // --- NUEVO MÓDULO DE COMANDAS ---
     private Node comandas() throws Exception {
-        VBox v = page("Comandas", "Pizarra de pedidos pendientes de preparación en cocina o barra.");
-        
+        VBox v = page("Comandas", "Sigue cada pedido desde que entra a cocina hasta que se entrega.");
         TableView<Comanda> t = new TableView<>();
-        t.setPlaceholder(new Label("No hay comandas pendientes. ¡Todo está al día!"));
-        String[] cols = {"N.º", "Mesa / Cliente", "Detalle del Pedido", "Hora de registro"};
-        
+        t.setPlaceholder(new Label("No hay comandas activas. Las ventas confirmadas aparecerán aquí."));
+        String[] cols = {"Comanda", "Venta", "Mesa / Cliente", "Productos", "Estado", "Hora"};
         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss");
         List<Function<Comanda, String>> fs = List.of(
-            c -> "" + c.id(), 
-            Comanda::mesa, 
-            Comanda::pedido, 
-            c -> sdf.format(c.fecha())
+            c -> "#" + c.id(),
+            c -> c.ventaId() == null ? "—" : "#" + c.ventaId(),
+            Comanda::mesa,
+            Comanda::pedido,
+            c -> c.estado().etiqueta(),
+            c -> c.fecha() == null ? "—" : sdf.format(c.fecha())
         );
-        
         for (int i=0; i<cols.length; i++) {
             final int j = i;
             TableColumn<Comanda, String> c = new TableColumn<>(cols[i]);
             c.setCellValueFactory(d -> new SimpleStringProperty(fs.get(j).apply(d.getValue())));
-            c.setPrefWidth(new double[]{50, 150, 350, 120}[i]);
+            c.setPrefWidth(new double[]{80, 75, 160, 300, 135, 85}[i]);
+            if (i == 4) {
+                c.setCellFactory(col -> new TableCell<>() {
+                    @Override protected void updateItem(String value, boolean empty) {
+                        super.updateItem(value, empty);
+                        setText(empty ? null : value);
+                        if (empty || getTableRow() == null || getTableRow().getItem() == null) {
+                            setStyle("");
+                        } else {
+                            EstadoComanda estado = getTableRow().getItem().estado();
+                            String color = switch (estado) {
+                                case PENDIENTE -> "#9A5B08";
+                                case PREPARANDO -> "#2457A6";
+                                case LISTO -> GREEN;
+                                case ENTREGADO -> MUTED;
+                            };
+                            setStyle("-fx-text-fill:" + color + ";-fx-font-weight:bold;");
+                        }
+                    }
+                });
+            }
             t.getColumns().add(c);
         }
         t.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
-        t.setPrefHeight(300);
-        
+        t.setPrefHeight(380);
         Runnable refresh = () -> { 
             try { 
-                t.getItems().setAll(comandaService.listarPendientes()); 
+                t.getItems().setAll(comandaService.listarActivas());
             } catch(Exception ex) { error(ex); } 
         };
-        
-        TextField mesa = new TextField(); mesa.setPromptText("Ej. Mesa 4 o 'Para llevar - Juan'");
-        TextField pedido = new TextField(); pedido.setPromptText("Ej. 2 Capuccinos, 1 Croissant...");
-        HBox.setHgrow(pedido, Priority.ALWAYS);
-        
-        Button add = primary("Registrar Comanda");
-        add.setOnAction(e -> run(() -> {
-            if (mesa.getText().isBlank() || pedido.getText().isBlank()) throw new IllegalArgumentException("Completa la mesa y el pedido para registrar la comanda.");
-            comandaService.registrar(mesa.getText().trim(), pedido.getText().trim());
-            refresh.run();
-            mesa.clear(); pedido.clear();
-        }));
-        
-        Button done = secondary("✔ Marcar pedido como Listo");
-        done.setStyle("-fx-background-color:#E5F0E9;-fx-text-fill:#174D3A;-fx-font-weight:800;-fx-padding:10 16 10 16;-fx-cursor:hand;");
-        done.setOnAction(e -> run(() -> {
-            Comanda c = t.getSelectionModel().getSelectedItem();
-            if (c == null) throw new IllegalArgumentException("Selecciona una comanda de la tabla para marcarla como lista.");
-            comandaService.marcarCompletada(c.id());
-            refresh.run();
-        }));
-        
-        VBox newCmd = card();
-        newCmd.getChildren().addAll(new Label("Anotar nuevo pedido"), new HBox(10, mesa, pedido, add));
-        
-        v.getChildren().addAll(new HBox(10, done), t, newCmd);
+        Button prepare = secondary("Iniciar preparación");
+        Button ready = secondary("Marcar como listo");
+        Button deliver = secondary("Marcar como entregado");
+        Button reload = secondary("Actualizar");
+        prepare.setDisable(true);
+        ready.setDisable(true);
+        deliver.setDisable(true);
+        t.getSelectionModel().selectedItemProperty().addListener((o, previous, selected) -> {
+            prepare.setDisable(selected == null || selected.estado() != EstadoComanda.PENDIENTE);
+            ready.setDisable(selected == null || selected.estado() != EstadoComanda.PREPARANDO);
+            deliver.setDisable(selected == null || selected.estado() != EstadoComanda.LISTO);
+        });
+        prepare.setOnAction(e -> cambiarEstadoComanda(t, EstadoComanda.PENDIENTE, EstadoComanda.PREPARANDO, refresh));
+        ready.setOnAction(e -> cambiarEstadoComanda(t, EstadoComanda.PREPARANDO, EstadoComanda.LISTO, refresh));
+        deliver.setOnAction(e -> cambiarEstadoComanda(t, EstadoComanda.LISTO, EstadoComanda.ENTREGADO, refresh));
+        reload.setOnAction(e -> refresh.run());
+        Label hint = subtitle("Las comandas se crean al confirmar una venta y quedan vinculadas a ella. Avanza cada pedido por sus estados.");
+        v.getChildren().addAll(hint, t, new HBox(10, prepare, ready, deliver, reload));
         refresh.run();
-        
         return v;
+    }
+
+    private void cambiarEstadoComanda(TableView<Comanda> table, EstadoComanda actual,
+                                      EstadoComanda siguiente, Runnable refresh) {
+        run(() -> {
+            Comanda selected = table.getSelectionModel().getSelectedItem();
+            if (selected == null) throw new IllegalArgumentException("Selecciona una comanda.");
+            if (selected.estado() != actual) throw new IllegalArgumentException("Actualiza la lista: el estado de esta comanda ya cambió.");
+            comandaService.cambiarEstado(selected.id(), actual, siguiente);
+            refresh.run();
+        });
     }
 
     private void exportarVentasExcel(List<String[]> ventasExportadas,String[] columnas,LocalDate desde,LocalDate hasta,String usuarioFiltrado,File archivo)throws Exception{

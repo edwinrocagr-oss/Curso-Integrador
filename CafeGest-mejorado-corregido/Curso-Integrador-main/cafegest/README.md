@@ -1,6 +1,6 @@
 # CaféGest - Sistema de gestión de cafetería
 
-Proyecto académico de escritorio con Java 17, JavaFX, Maven, Guava y PostgreSQL. Maneja productos terminados, inventario y ventas. Guava se utiliza para mantener inmutable el catálogo de productos de demostración.
+Proyecto académico de escritorio con Java 17, JavaFX, Maven, Guava y PostgreSQL. Maneja productos, inventario, ventas, usuarios y comandas de cocina. Guava se utiliza para mantener inmutable el catálogo de productos de demostración.
 
 ## Requisitos
 
@@ -27,8 +27,9 @@ La conexión predeterminada está en `src/main/resources/application.properties`
 2. Copia el archivo de ejemplo de configuración local y escribe la contraseña válida de PostgreSQL.
 3. Ejecuta `mvn clean javafx:run`. La primera vez que se inicia, CaféGest crea las tablas y agrega productos de demostración si no hay productos activos.
 4. En el primer inicio de la base, crea la contraseña del administrador de CaféGest (mínimo 10 caracteres). El usuario inicial es `admin`.
+5. Al confirmar una venta se crea automáticamente su comanda vinculada. En la pantalla de ventas puedes indicar la mesa o el cliente; en Comandas se avanza el pedido por Pendiente, En preparación, Listo y Entregado.
 
-No uses una base que ya tenga tablas `usuarios`, `productos`, `ventas`, `venta_detalle` o `movimientos` con otro esquema.
+No uses una base que ya tenga tablas `usuarios`, `productos`, `ventas`, `venta_detalle`, `movimientos` o `comandas` con otro esquema.
 
 ## Trabajar con compañeros
 
@@ -41,7 +42,8 @@ Para compartir ventas e inventario, todos deben conectarse a **la misma instanci
 - Inicio de sesión y creación inicial del administrador con hash PBKDF2-HMAC-SHA256.
 - Alta, edicion y baja logica de productos.
 - Ajustes de inventario y registro de movimientos.
-- Ventas transaccionales con validación y descuento de stock.
+- Ventas transaccionales con validación, descuento de stock y creación de una comanda relacionada con cada venta.
+- Gestión de usuarios por administradores y seguimiento de comandas hasta su entrega.
 - Resumen, historial con filtros y exportación a Excel con fechas y montos numéricos, filtros de columna y total calculado.
 
-La administración de usuarios desde la interfaz, los reportes avanzados, los tickets imprimibles y las pruebas de integración siguen pendientes.
+Los reportes avanzados, los tickets imprimibles y las pruebas de integración con PostgreSQL siguen pendientes.

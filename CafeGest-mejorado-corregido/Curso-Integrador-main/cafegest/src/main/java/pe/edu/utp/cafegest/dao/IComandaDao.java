@@ -1,11 +1,11 @@
 package pe.edu.utp.cafegest.dao;
 
 import pe.edu.utp.cafegest.model.Comanda;
+import pe.edu.utp.cafegest.model.EstadoComanda;
 import java.sql.SQLException;
 import java.util.List;
 
 public interface IComandaDao {
-    List<Comanda> listarPendientes() throws SQLException;
-    void registrar(String mesa, String pedido) throws SQLException;
-    void marcarCompletada(int id) throws SQLException;
+    List<Comanda> listarActivas() throws SQLException;
+    void cambiarEstado(int id, EstadoComanda actual, EstadoComanda siguiente) throws SQLException;
 }

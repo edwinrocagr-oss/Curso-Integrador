@@ -1,6 +1,7 @@
 package pe.edu.utp.cafegest.dao;
 
 import pe.edu.utp.cafegest.model.Comanda;
+import pe.edu.utp.cafegest.model.EstadoComanda;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,35 +15,42 @@ public class ComandaDaoImpl implements IComandaDao {
     }
 
     @Override
-    public List<Comanda> listarPendientes() throws SQLException {
+    public List<Comanda> listarActivas() throws SQLException {
         List<Comanda> lista = new ArrayList<>();
-        // Solo traemos las que no están listas, ordenadas por la más antigua primero (FIFO)
-        try (PreparedStatement p = this.conexion.prepareStatement("SELECT * FROM comandas WHERE estado = 'PENDIENTE' ORDER BY fecha ASC");
+        try (PreparedStatement p = this.conexion.prepareStatement(
+                "SELECT id, venta_id, mesa, pedido, estado, fecha FROM comandas " +
+                "WHERE estado <> 'ENTREGADO' " +
+                "ORDER BY CASE estado WHEN 'PENDIENTE' THEN 0 WHEN 'PREPARANDO' THEN 1 WHEN 'LISTO' THEN 2 ELSE 3 END, fecha ASC");
              ResultSet r = p.executeQuery()) {
             while (r.next()) {
-                lista.add(new Comanda(
-                    r.getInt("id"), r.getString("mesa"), r.getString("pedido"), 
-                    r.getString("estado"), r.getTimestamp("fecha")
-                ));
+                int ventaId = r.getInt("venta_id");
+                Integer venta = r.wasNull() ? null : ventaId;
+                EstadoComanda estado;
+                try {
+                    estado = EstadoComanda.valueOf(r.getString("estado"));
+                } catch (IllegalArgumentException e) {
+                    throw new SQLException("Estado inválido en la comanda #" + r.getInt("id") + ".", e);
+                }
+                lista.add(new Comanda(r.getInt("id"), venta, r.getString("mesa"),
+                    r.getString("pedido"), estado, r.getTimestamp("fecha")));
             }
         }
         return lista;
     }
 
     @Override
-    public void registrar(String mesa, String pedido) throws SQLException {
-        try (PreparedStatement p = this.conexion.prepareStatement("INSERT INTO comandas (mesa, pedido) VALUES (?, ?)")) {
-            p.setString(1, mesa);
-            p.setString(2, pedido);
-            p.executeUpdate();
+    public void cambiarEstado(int id, EstadoComanda actual, EstadoComanda siguiente) throws SQLException {
+        if (!actual.puedeAvanzarA(siguiente)) {
+            throw new IllegalArgumentException("La comanda solo puede avanzar al siguiente estado.");
         }
-    }
-
-    @Override
-    public void marcarCompletada(int id) throws SQLException {
-        try (PreparedStatement p = this.conexion.prepareStatement("UPDATE comandas SET estado = 'LISTO' WHERE id = ?")) {
-            p.setInt(1, id);
-            p.executeUpdate();
+        try (PreparedStatement p = this.conexion.prepareStatement(
+                "UPDATE comandas SET estado = ? WHERE id = ? AND estado = ?")) {
+            p.setString(1, siguiente.name());
+            p.setInt(2, id);
+            p.setString(3, actual.name());
+            if (p.executeUpdate() != 1) {
+                throw new SQLException("La comanda cambió o ya no está disponible. Actualiza la lista e inténtalo otra vez.");
+            }
         }
     }
 }

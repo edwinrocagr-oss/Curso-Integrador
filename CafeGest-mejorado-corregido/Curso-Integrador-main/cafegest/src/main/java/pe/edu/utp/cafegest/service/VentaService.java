@@ -43,19 +43,30 @@ public class VentaService {
     // --- LÓGICA ORIGINAL DE VENTAS ---
 
     public int vender(String usuario, List<Linea> lineas) throws SQLException {
+        return vender(usuario, lineas, "Para llevar");
+    }
+
+    public int vender(String usuario, List<Linea> lineas, String mesa) throws SQLException {
         if(lineas==null||lineas.isEmpty())throw new IllegalArgumentException("Venta vacía");
+        String mesaCliente = mesa == null || mesa.isBlank() ? "Para llevar" : mesa.trim();
+        if (mesaCliente.length() > 120) throw new IllegalArgumentException("La mesa o cliente no puede superar 120 caracteres.");
         Map<Integer,Integer> agrupado=new LinkedHashMap<>();
         for(Linea l:lineas){validarCantidad(l.cantidad());agrupado.merge(l.productoId(),l.cantidad(),Math::addExact);}
         try(Connection c=Database.open()){c.setAutoCommit(false);try {
             BigDecimal total=BigDecimal.ZERO;
             Map<Integer,BigDecimal> precios=new LinkedHashMap<>();
+            Map<Integer,String> nombres=new LinkedHashMap<>();
             for(var entry:agrupado.entrySet()){
-                try(PreparedStatement p=c.prepareStatement("SELECT precio,stock FROM productos WHERE id=? AND activo=TRUE FOR UPDATE")){
+                try(PreparedStatement p=c.prepareStatement("SELECT nombre,precio,stock FROM productos WHERE id=? AND activo=TRUE FOR UPDATE")){
                     p.setInt(1,entry.getKey());try(ResultSet r=p.executeQuery()){
                         if(!r.next())throw new SQLException("Producto no disponible: "+entry.getKey());
                         if(r.getInt("stock")<entry.getValue())throw new SQLException("Stock insuficiente para producto "+entry.getKey());
-                        BigDecimal precio=r.getBigDecimal("precio");precios.put(entry.getKey(),precio);total=total.add(precio.multiply(BigDecimal.valueOf(entry.getValue())));
+                        BigDecimal precio=r.getBigDecimal("precio");precios.put(entry.getKey(),precio);nombres.put(entry.getKey(),r.getString("nombre"));total=total.add(precio.multiply(BigDecimal.valueOf(entry.getValue())));
                     }}
+            }
+            StringJoiner detallePedido = new StringJoiner("\n");
+            for (var entry : agrupado.entrySet()) {
+                detallePedido.add(entry.getValue() + " x " + nombres.get(entry.getKey()));
             }
             int ventaId;
             try(PreparedStatement p=c.prepareStatement("INSERT INTO ventas(usuario,total) VALUES(?,?)",Statement.RETURN_GENERATED_KEYS)){
@@ -66,6 +77,9 @@ public class VentaService {
                 try(PreparedStatement p=c.prepareStatement("UPDATE productos SET stock=stock-? WHERE id=? AND stock>=?")){p.setInt(1,cantidad);p.setInt(2,id);p.setInt(3,cantidad);if(p.executeUpdate()!=1)throw new SQLException("Stock insuficiente");}
                 try(PreparedStatement p=c.prepareStatement("INSERT INTO venta_detalle(venta_id,producto_id,cantidad,precio) VALUES(?,?,?,?)")){p.setInt(1,ventaId);p.setInt(2,id);p.setInt(3,cantidad);p.setBigDecimal(4,precios.get(id));p.executeUpdate();}
                 try(PreparedStatement p=c.prepareStatement("INSERT INTO movimientos(producto_id,tipo,cantidad,observacion) VALUES(?,?,?,?)")){p.setInt(1,id);p.setString(2,"VENTA");p.setInt(3,-cantidad);p.setString(4,"Venta #"+ventaId);p.executeUpdate();}
+            }
+            try(PreparedStatement p=c.prepareStatement("INSERT INTO comandas(venta_id,mesa,pedido) VALUES(?,?,?)")){
+                p.setInt(1,ventaId);p.setString(2,mesaCliente);p.setString(3,detallePedido.toString());p.executeUpdate();
             }
             c.commit();return ventaId;
         }catch(Exception e){c.rollback();throw e instanceof SQLException?(SQLException)e:new SQLException(e);}}
