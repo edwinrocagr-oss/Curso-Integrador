@@ -1,0 +1,91 @@
+/* CaféGest: tema visual para la presentación final. No modifica lógica de negocio. */
+.root {
+    -fx-font-family: "Segoe UI", "Arial", sans-serif;
+    -fx-font-size: 13px;
+    -fx-accent: #24664d;
+    -fx-focus-color: #438b6b;
+    -fx-faint-focus-color: rgba(67,139,107,0.13);
+}
+.content-page { -fx-background-color: #f8f7f3; }
+.surface-card {
+    -fx-background-color: white;
+    -fx-background-radius: 16;
+    -fx-border-color: #e9e8e1;
+    -fx-border-radius: 16;
+    -fx-border-width: 1;
+    -fx-effect: dropshadow(gaussian, rgba(32,46,39,0.07), 15, 0.10, 0, 3);
+}
+.label { -fx-text-fill: #25352d; }
+.sidebar { -fx-background-color: linear-gradient(to bottom, #174d3a, #103b2c); }
+.sidebar-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #e9f4eb;
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
+    -fx-padding: 12 13 12 13;
+    -fx-background-radius: 10;
+    -fx-cursor: hand;
+}
+.sidebar-button:hover { -fx-background-color: rgba(255,255,255,0.13); }
+.sidebar-button-active {
+    -fx-background-color: #e5f0e9;
+    -fx-text-fill: #174d3a;
+    -fx-font-weight: bold;
+}
+.sidebar-button-active:hover { -fx-background-color: #f1f7f1; }
+.primary-action {
+    -fx-background-color: #24664d;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 10;
+    -fx-padding: 11 17 11 17;
+    -fx-cursor: hand;
+}
+.primary-action:hover { -fx-background-color: #174d3a; }
+.primary-action:pressed { -fx-background-color: #103b2c; }
+.secondary-action {
+    -fx-background-color: #e5f0e9;
+    -fx-text-fill: #174d3a;
+    -fx-font-weight: bold;
+    -fx-background-radius: 10;
+    -fx-padding: 11 15 11 15;
+    -fx-cursor: hand;
+}
+.secondary-action:hover { -fx-background-color: #d2e5d8; }
+.button:disabled { -fx-opacity: 0.5; -fx-cursor: default; }
+.text-field, .password-field, .combo-box, .spinner, .text-area {
+    -fx-background-color: white;
+    -fx-border-color: #d8e1d9;
+    -fx-border-radius: 9;
+    -fx-background-radius: 9;
+    -fx-padding: 8 10 8 10;
+}
+.text-field:focused, .password-field:focused, .combo-box:focused, .text-area:focused {
+    -fx-border-color: #438b6b;
+    -fx-border-width: 1.5;
+}
+.cafegest-table, .table-view {
+    -fx-background-color: white;
+    -fx-background-radius: 12;
+    -fx-border-color: #e9e8e1;
+    -fx-border-radius: 12;
+}
+.table-view .column-header-background {
+    -fx-background-color: #eff4ef;
+    -fx-background-radius: 12 12 0 0;
+}
+.table-view .column-header, .table-view .filler {
+    -fx-background-color: transparent;
+    -fx-size: 39px;
+    -fx-border-color: transparent transparent #e4e9e4 transparent;
+}
+.table-view .column-header .label { -fx-text-fill: #345747; -fx-font-weight: bold; }
+.table-row-cell { -fx-background-color: white; -fx-cell-size: 38px; }
+.table-row-cell:odd { -fx-background-color: #fafbf9; }
+.table-row-cell:selected { -fx-background-color: #dcece2; }
+.table-row-cell:selected .text { -fx-fill: #173f2e; }
+.table-cell { -fx-border-color: transparent; -fx-padding: 6 9 6 9; }
+.list-view { -fx-background-color: white; -fx-border-color: #e9e8e1; -fx-border-radius: 10; }
+.list-cell:filled:selected { -fx-background-color: #dcece2; }
+.separator .line { -fx-border-color: #e4e9e4; }
+.scroll-bar .thumb { -fx-background-color: #c6d7ca; -fx-background-radius: 8; }

@@ -37,12 +37,12 @@ public final class Database {
     private Database() {}
     public static Connection open() throws SQLException {
         Properties config = loadConfig();
-        String password = config.getProperty("db.password", "");
+        String password = System.getenv().getOrDefault("CAFEGEST_DB_PASSWORD", config.getProperty("db.password", ""));
         if (password == null || password.isBlank()) {
             throw new SQLException("Configura db.password en src/main/resources/application-local.properties.");
         }
-        String url = config.getProperty("db.url");
-        String user = config.getProperty("db.user");
+        String url = System.getenv().getOrDefault("CAFEGEST_DB_URL", config.getProperty("db.url"));
+        String user = System.getenv().getOrDefault("CAFEGEST_DB_USER", config.getProperty("db.user"));
         return DriverManager.getConnection(url, user, password);
     }
 

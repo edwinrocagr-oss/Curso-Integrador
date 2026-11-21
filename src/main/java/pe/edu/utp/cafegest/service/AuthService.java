@@ -9,6 +9,7 @@ import javax.crypto.spec.PBEKeySpec;
 public class AuthService {
     private static final int ITER=210000;
     public static String hash(String clave) {
+        if (clave == null || clave.isBlank()) throw new IllegalArgumentException("La contraseña no puede estar vacía");
         try {byte[] salt=new byte[16];new SecureRandom().nextBytes(salt);byte[] bytes=derivar(clave,salt,ITER);return ITER+":"+Base64.getEncoder().encodeToString(salt)+":"+Base64.getEncoder().encodeToString(bytes);}catch(Exception e){throw new IllegalStateException(e);}
     }
     private static byte[] derivar(String clave,byte[] salt,int iter) throws Exception {
@@ -16,7 +17,7 @@ public class AuthService {
         try{return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).getEncoded();}finally{spec.clearPassword();}
     }
     public static boolean verificar(String clave,String guardado) {
-        try {String[] p=guardado.split(":");if(p.length!=3)return false;return MessageDigest.isEqual(derivar(clave,Base64.getDecoder().decode(p[1]),Integer.parseInt(p[0])),Base64.getDecoder().decode(p[2]));}catch(Exception e){return false;}
+        try {if (clave == null || guardado == null) return false;String[] p=guardado.split(":");if(p.length!=3)return false;int iter=Integer.parseInt(p[0]);if(iter<10000||iter>1000000)return false;byte[] salt=Base64.getDecoder().decode(p[1]);byte[] expected=Base64.getDecoder().decode(p[2]);if(salt.length!=16||expected.length!=32)return false;return MessageDigest.isEqual(derivar(clave,salt,iter),expected);}catch(Exception e){return false;}
     }
     public void crearAdminInicial(String clave) throws SQLException {
         if(clave==null||clave.length()<10)throw new IllegalArgumentException("La clave inicial debe tener 10 caracteres como mínimo");

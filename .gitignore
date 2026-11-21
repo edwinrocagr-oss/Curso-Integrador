@@ -14,3 +14,6 @@ src/main/resources/application-local.properties
 *.class
 inputFiles.lst
 createdFiles.lst
+logs/
+backups/
+*.dump

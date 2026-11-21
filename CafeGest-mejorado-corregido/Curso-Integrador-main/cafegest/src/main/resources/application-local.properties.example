@@ -1,2 +1,0 @@
-# Copy this file to application-local.properties and enter your local PostgreSQL password.
-db.password=YOUR_POSTGRES_PASSWORD

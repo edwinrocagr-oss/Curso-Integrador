@@ -72,6 +72,7 @@ public class MainApp extends Application {
     private String usuario;
     private String rol;
     private StackPane content;
+    private final List<Button> navigationButtons = new ArrayList<>();
 
     private static final String BG = "#F6F5F0";
     private static final String GREEN = "#174D3A";
@@ -93,13 +94,18 @@ public class MainApp extends Application {
     private Label title(String text) { Label l = new Label(text); l.setStyle("-fx-font-size:25px;-fx-font-weight:700;-fx-text-fill:"+TEXT+";"); return l; }
     private Label subtitle(String text) { Label l = new Label(text); l.setStyle("-fx-text-fill:"+MUTED+";-fx-font-size:13px;"); return l; }
     private VBox page(String heading, String sub) {
-        VBox v = new VBox(18); v.setPadding(new Insets(28)); v.setStyle(CSS+"-fx-background-color:"+BG+";");
+        VBox v = new VBox(18); v.setPadding(new Insets(28)); v.setStyle(CSS+"-fx-background-color:"+BG+";"); v.getStyleClass().add("content-page");
         v.getChildren().addAll(title(heading), subtitle(sub)); return v;
     }
-    private VBox card() { VBox b = new VBox(10); b.setPadding(new Insets(18)); b.setStyle("-fx-background-color:white;-fx-background-radius:14;-fx-border-color:"+BORDER+";-fx-border-radius:14;"); return b; }
-    private void show(Parent parent) { stage.setScene(new Scene(parent)); }
-    private Button primary(String text) { Button b = new Button(text); b.setStyle("-fx-background-color:"+GREEN+";-fx-text-fill:white;-fx-font-weight:700;-fx-background-radius:9;-fx-padding:10 16 10 16;-fx-cursor:hand;"); return b; }
-    private Button secondary(String text) { Button b = new Button(text); b.setStyle("-fx-background-color:"+GREEN_LIGHT+";-fx-text-fill:"+GREEN+";-fx-font-weight:700;-fx-background-radius:9;-fx-padding:10 14 10 14;-fx-cursor:hand;"); return b; }
+    private VBox card() { VBox b = new VBox(10); b.setPadding(new Insets(18)); b.getStyleClass().add("surface-card"); return b; }
+    private void show(Parent parent) {
+        Scene scene = new Scene(parent);
+        var css = getClass().getResource("/cafegest-theme.css");
+        if (css != null) scene.getStylesheets().add(css.toExternalForm());
+        stage.setScene(scene);
+    }
+    private Button primary(String text) { Button b = new Button(text); b.getStyleClass().add("primary-action"); return b; }
+    private Button secondary(String text) { Button b = new Button(text); b.getStyleClass().add("secondary-action"); return b; }
     
     private void setup() {
         VBox v = new VBox(15); v.setPadding(new Insets(38)); v.setAlignment(Pos.CENTER_LEFT); v.setMaxWidth(460);
@@ -130,20 +136,26 @@ public class MainApp extends Application {
         VBox nav = new VBox(8); nav.setPadding(new Insets(24,14,20,14)); nav.setPrefWidth(225); nav.setStyle("-fx-background-color:"+GREEN+";");
         Label logo = new Label("☕ CaféGest"); logo.setStyle("-fx-text-fill:white;-fx-font-size:23px;-fx-font-weight:800;");
         Label tagline = new Label("GESTIÓN DE CAFETERÍA"); tagline.setStyle("-fx-text-fill:#B8D0C1;-fx-font-size:10px;-fx-font-weight:bold;");
+        nav.getStyleClass().add("sidebar");
         nav.getChildren().addAll(logo,tagline,new Separator());
+        navigationButtons.clear();
         content = new StackPane(); content.setPadding(new Insets(0)); root.setLeft(nav); root.setCenter(content);
         
         // Se agregó la opción de Comandas al menú
         String[][] items = {{"⌂","Resumen"},{"☕","Productos"},{"▤","Inventario"},{"＋","Nueva venta"},{"◷","Historial y reportes"},{"👥","Usuarios"},{"🛎️","Comandas"}};
-        for (int i=0;i<items.length;i++) { final int index=i; Button b=new Button(items[i][0]+"    "+items[i][1]); b.setAlignment(Pos.CENTER_LEFT); b.setMaxWidth(Double.MAX_VALUE); b.setPrefHeight(44); b.setStyle(navStyle(false)); b.setOnMouseEntered(e->b.setStyle(navStyle(true))); b.setOnMouseExited(e->b.setStyle(navStyle(false))); b.setOnAction(e->navigate(index)); nav.getChildren().add(b); }
+        for (int i=0;i<items.length;i++) { final int index=i; Button b=new Button(items[i][0]+"    "+items[i][1]); b.setAlignment(Pos.CENTER_LEFT); b.setMaxWidth(Double.MAX_VALUE); b.setPrefHeight(44); b.getStyleClass().add("sidebar-button"); b.setOnAction(e->navigate(index)); navigationButtons.add(b); nav.getChildren().add(b); }
         
-        Region spacer=new Region(); VBox.setVgrow(spacer,Priority.ALWAYS); Label user=new Label("●  "+usuario+"\n    "+rol); user.setStyle("-fx-text-fill:white;-fx-padding:12 5 12 5;"); Button logout=new Button("↪   Cerrar sesión"); logout.setMaxWidth(Double.MAX_VALUE); logout.setStyle(navStyle(false)); logout.setOnAction(e->login()); nav.getChildren().addAll(spacer,user,logout);
+        Region spacer=new Region(); VBox.setVgrow(spacer,Priority.ALWAYS); Label user=new Label("●  "+usuario+"\n    "+rol); user.setStyle("-fx-text-fill:white;-fx-padding:12 5 12 5;"); Button logout=new Button("↪   Cerrar sesión"); logout.setMaxWidth(Double.MAX_VALUE); logout.getStyleClass().add("sidebar-button"); logout.setOnAction(e->login()); nav.getChildren().addAll(spacer,user,logout);
         navigate(0); show(root);
     }
     
-    private String navStyle(boolean hover) { return "-fx-background-color:"+(hover?"#2C644F":"transparent")+";-fx-text-fill:white;-fx-font-size:13px;-fx-font-weight:600;-fx-padding:12 10 12 10;-fx-background-radius:9;-fx-cursor:hand;"; }
     
-    private void navigate(int index) { 
+    private void navigate(int index) {
+        for (int i = 0; i < navigationButtons.size(); i++) {
+            Button button = navigationButtons.get(i);
+            button.getStyleClass().remove("sidebar-button-active");
+            if (i == index) button.getStyleClass().add("sidebar-button-active");
+        }
         try { 
             Node n=switch(index){
                 case 0->dashboard();
@@ -199,7 +211,7 @@ public class MainApp extends Application {
     }
     private void clearFields(TextField n,ComboBox<String> c,TextField p,TextField s,TextField m){n.clear();c.setValue(null);p.clear();s.clear();m.setText("5");}
     private void validateProduct(TextField n,ComboBox<String> c,TextField p,TextField s,TextField m){if(n.getText().isBlank()||c.getValue()==null)throw new IllegalArgumentException("Completa el nombre y la categoría.");BigDecimal price=new BigDecimal(p.getText().trim());int stockVal=Integer.parseInt(s.getText().trim()),min=Integer.parseInt(m.getText().trim());if(price.signum()<0||stockVal<0||min<0)throw new IllegalArgumentException("El precio y las cantidades no pueden ser negativos.");}
-    private TableView<Producto> productTable() throws Exception {TableView<Producto> t=new TableView<>();String[] cols={"ID","Producto","Categoría","Precio","Existencias","Mínimo"};List<Function<Producto,String>> fs=List.of(p->""+p.id(),Producto::nombre,Producto::categoria,p->"S/ "+p.precio().toPlainString(),p->""+p.stock(),p->""+p.minimo());for(int i=0;i<cols.length;i++){final int j=i;TableColumn<Producto,String> c=new TableColumn<>(cols[i]);c.setCellValueFactory(d->new SimpleStringProperty(fs.get(j).apply(d.getValue())));c.setPrefWidth(new double[]{55,210,155,100,100,85}[i]);if(i==4)c.setCellFactory(col->new TableCell<>(){@Override protected void updateItem(String value,boolean empty){super.updateItem(value,empty);setText(empty?null:value);if(empty||getTableRow()==null||getTableRow().getItem()==null)setStyle("");else{Producto p=(Producto)getTableRow().getItem();setStyle(p.stock()<=p.minimo()?"-fx-text-fill:#B42318;-fx-font-weight:bold;":"-fx-text-fill:"+GREEN+";");}}});t.getColumns().add(c);}t.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);t.setPrefHeight(300);return t;}
+    private TableView<Producto> productTable() throws Exception {TableView<Producto> t=new TableView<>();String[] cols={"ID","Producto","Categoría","Precio","Existencias","Mínimo"};List<Function<Producto,String>> fs=List.of(p->""+p.id(),Producto::nombre,Producto::categoria,p->"S/ "+p.precio().toPlainString(),p->""+p.stock(),p->""+p.minimo());for(int i=0;i<cols.length;i++){final int j=i;TableColumn<Producto,String> c=new TableColumn<>(cols[i]);c.setCellValueFactory(d->new SimpleStringProperty(fs.get(j).apply(d.getValue())));c.setPrefWidth(new double[]{55,210,155,100,100,85}[i]);if(i==4)c.setCellFactory(col->new TableCell<>(){@Override protected void updateItem(String value,boolean empty){super.updateItem(value,empty);setText(empty?null:value);if(empty||getTableRow()==null||getTableRow().getItem()==null)setStyle("");else{Producto p=(Producto)getTableRow().getItem();setStyle(p.stock()<=p.minimo()?"-fx-text-fill:#B42318;-fx-font-weight:bold;":"-fx-text-fill:"+GREEN+";");}}});t.getColumns().add(c);}t.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);t.setPrefHeight(300);t.getStyleClass().add("cafegest-table");return t;}
     private Producto selected(TableView<Producto> t){Producto p=t.getSelectionModel().getSelectedItem();if(p==null)throw new IllegalArgumentException("Selecciona primero un producto de la tabla.");return p;}
 
     private Node inventario() throws Exception {
@@ -222,7 +234,7 @@ public class MainApp extends Application {
         ListView<Producto> catalog=new ListView<>();catalog.setPrefHeight(250);catalog.setCellFactory(lv->new ListCell<>(){@Override protected void updateItem(Producto p,boolean empty){super.updateItem(p,empty);if(empty||p==null){setText(null);setGraphic(null);}else{Label n=new Label(p.nombre());n.setStyle("-fx-font-weight:bold;-fx-text-fill:"+TEXT+";");Label d=new Label(p.categoria()+"  ·  S/ "+p.precio().toPlainString()+"  ·  Stock: "+p.stock());d.setStyle("-fx-text-fill:"+MUTED+";-fx-font-size:11px;");VBox box=new VBox(4,n,d);box.setPadding(new Insets(5));setGraphic(box);setText(null);}}});
         Runnable filter=()->catalog.getItems().setAll(available.stream().filter(p->p.stock()>0).filter(p->category.getValue()==null||category.getValue().equals("Todas las categorías")||p.categoria().equals(category.getValue())).filter(p->(p.nombre()+" "+p.categoria()).toLowerCase().contains(search.getText().toLowerCase())).toList());search.textProperty().addListener((o,a,b)->filter.run());category.valueProperty().addListener((o,a,b)->filter.run());filter.run();
         Spinner<Integer> qty=new Spinner<>(1,100,1);qty.setEditable(true);Button add=primary("Agregar al carrito  →");TableView<CartItem> cart=new TableView<>();cart.setPlaceholder(new Label("Tu carrito está vacío. Selecciona un producto para comenzar."));cart.setPrefHeight(250);
-        TableColumn<CartItem,String> pn=new TableColumn<>("Producto");pn.setCellValueFactory(d->new SimpleStringProperty(d.getValue().producto().nombre()));TableColumn<CartItem,String> pq=new TableColumn<>("Cant.");pq.setCellValueFactory(d->new SimpleStringProperty(""+d.getValue().cantidad()));TableColumn<CartItem,String> pu=new TableColumn<>("Precio");pu.setCellValueFactory(d->new SimpleStringProperty("S/ "+d.getValue().producto().precio().toPlainString()));TableColumn<CartItem,String> pt=new TableColumn<>("Subtotal");pt.setCellValueFactory(d->new SimpleStringProperty("S/ "+d.getValue().subtotal().toPlainString()));cart.getColumns().addAll(pn,pq,pu,pt);cart.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        TableColumn<CartItem,String> pn=new TableColumn<>("Producto");pn.setCellValueFactory(d->new SimpleStringProperty(d.getValue().producto().nombre()));TableColumn<CartItem,String> pq=new TableColumn<>("Cant.");pq.setCellValueFactory(d->new SimpleStringProperty(""+d.getValue().cantidad()));TableColumn<CartItem,String> pu=new TableColumn<>("Precio");pu.setCellValueFactory(d->new SimpleStringProperty("S/ "+d.getValue().producto().precio().toPlainString()));TableColumn<CartItem,String> pt=new TableColumn<>("Subtotal");pt.setCellValueFactory(d->new SimpleStringProperty("S/ "+d.getValue().subtotal().toPlainString()));cart.getColumns().addAll(pn,pq,pu,pt);cart.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);cart.getStyleClass().add("cafegest-table");
         Label total=new Label("Total: S/ 0.00");total.setStyle("-fx-font-size:24px;-fx-font-weight:800;-fx-text-fill:"+GREEN+";");
         add.setOnAction(e->{Producto p=catalog.getSelectionModel().getSelectedItem();if(p==null){new Alert(Alert.AlertType.WARNING,"Selecciona un producto del catálogo.").showAndWait();return;}int q=qty.getValue();int existing=cart.getItems().stream().filter(it->it.producto().id()==p.id()).mapToInt(CartItem::cantidad).sum();if(existing+q>p.stock()){new Alert(Alert.AlertType.WARNING,"Stock disponible: "+p.stock()+" unidades.").showAndWait();return;}Optional<CartItem> old=cart.getItems().stream().filter(it->it.producto().id()==p.id()).findFirst();if(old.isPresent()){int idx=cart.getItems().indexOf(old.get());cart.getItems().set(idx,new CartItem(p,old.get().cantidad()+q));}else cart.getItems().add(new CartItem(p,q));updateTotal(cart,total);});
         Button remove=secondary("Quitar seleccionado");remove.setOnAction(e->{CartItem item=cart.getSelectionModel().getSelectedItem();if(item!=null)cart.getItems().remove(item);updateTotal(cart,total);});Button clear=secondary("Vaciar carrito");clear.setOnAction(e->{cart.getItems().clear();updateTotal(cart,total);});
