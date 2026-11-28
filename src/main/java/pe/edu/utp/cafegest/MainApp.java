@@ -40,7 +40,7 @@ import java.time.LocalDate;
 import java.util.*;
 import java.util.function.Function;
 
-/** Interfaz JavaFX de CaféGest: navegación sencilla, catálogo, inventario, ventas, usuarios y comandas. */
+/** Vi TA Interfaz JavaFX de CaféGest: navegación sencilla, catálogo, inventario, ventas, usuarios y comandas. */
 public class MainApp extends Application {
     
     private static final Logger logger = LoggerFactory.getLogger(MainApp.class);
